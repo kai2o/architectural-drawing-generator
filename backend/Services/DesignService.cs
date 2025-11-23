@@ -1,5 +1,6 @@
 using backend.DTOs;
 using backend.Models;
+using Microsoft.Extensions.Logging;
 
 namespace backend.Services;
 
@@ -8,16 +9,20 @@ public class DesignService : IDesignService
     private readonly ILayoutEngineService _layoutEngine;
     private readonly ICadEngineService _cadEngine;
     private readonly ISolidWorksEngineService _solidWorksEngine;
-    private readonly Dictionary<Guid, RoomDesign> _designStorage = new();
+    private readonly ILogger<DesignService> _logger;
+    // Use static storage so designs persist across HTTP requests (since service is Scoped)
+    private static readonly Dictionary<Guid, RoomDesign> _designStorage = new();
 
     public DesignService(
         ILayoutEngineService layoutEngine,
         ICadEngineService cadEngine,
-        ISolidWorksEngineService solidWorksEngine)
+        ISolidWorksEngineService solidWorksEngine,
+        ILogger<DesignService> logger)
     {
         _layoutEngine = layoutEngine;
         _cadEngine = cadEngine;
         _solidWorksEngine = solidWorksEngine;
+        _logger = logger;
     }
 
     public Task<DesignResponseDto> GenerateDesignAsync(DesignRequestDto request)
@@ -31,7 +36,11 @@ public class DesignService : IDesignService
             request.Occupants
         );
 
-        _designStorage[design.Id] = design;
+        lock (_designStorage)
+        {
+            _designStorage[design.Id] = design;
+            _logger.LogInformation("Design stored successfully. ID: {DesignId}, Storage count: {Count}", design.Id, _designStorage.Count);
+        }
 
         var response = new DesignResponseDto
         {
@@ -45,13 +54,18 @@ public class DesignService : IDesignService
 
     public Task<RoomDesign?> GetDesignAsync(Guid id)
     {
-        _designStorage.TryGetValue(id, out var design);
-        return Task.FromResult(design);
+        lock (_designStorage)
+        {
+            _designStorage.TryGetValue(id, out var design);
+            return Task.FromResult(design);
+        }
     }
 
     public Task<Preview2DDto> GetPreview2DAsync(Guid id)
     {
-        if (!_designStorage.TryGetValue(id, out var design))
+        lock (_designStorage)
+        {
+            if (!_designStorage.TryGetValue(id, out var design))
         {
             return Task.FromResult<Preview2DDto>(null!);
         }
@@ -86,11 +100,14 @@ public class DesignService : IDesignService
         };
 
         return Task.FromResult(preview);
+        }
     }
 
     public Task<Preview3DDto> GetPreview3DAsync(Guid id)
     {
-        if (!_designStorage.TryGetValue(id, out var design))
+        lock (_designStorage)
+        {
+            if (!_designStorage.TryGetValue(id, out var design))
         {
             return Task.FromResult<Preview3DDto>(null!);
         }
@@ -190,28 +207,63 @@ public class DesignService : IDesignService
         };
 
         return Task.FromResult(preview);
+        }
     }
 
     public Task<byte[]?> GetCadFileAsync(Guid id)
     {
-        if (!_designStorage.TryGetValue(id, out var design))
+        lock (_designStorage)
         {
-            return Task.FromResult<byte[]?>(null);
-        }
+            _logger.LogInformation("GetCadFileAsync called for ID: {DesignId}, Storage count: {Count}", id, _designStorage.Count);
+            _logger.LogInformation("Available design IDs: {Ids}", string.Join(", ", _designStorage.Keys.Select(k => k.ToString())));
+            
+            if (!_designStorage.TryGetValue(id, out var design))
+            {
+                _logger.LogWarning("Design not found in storage for ID: {DesignId}", id);
+                return Task.FromResult<byte[]?>(null);
+            }
 
-        var cadBytes = _cadEngine.GenerateDwgFile(design);
-        return Task.FromResult<byte[]?>(cadBytes);
+            _logger.LogInformation("Design found, generating CAD file for ID: {DesignId}", id);
+            try
+            {
+                var cadBytes = _cadEngine.GenerateDwgFile(design);
+                _logger.LogInformation("CAD file generated successfully. Size: {Size} bytes", cadBytes?.Length ?? 0);
+                return Task.FromResult<byte[]?>(cadBytes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating CAD file for design {DesignId}", id);
+                return Task.FromResult<byte[]?>(null);
+            }
+        }
     }
 
     public Task<byte[]?> GetSolidWorksFileAsync(Guid id)
     {
-        if (!_designStorage.TryGetValue(id, out var design))
+        lock (_designStorage)
         {
-            return Task.FromResult<byte[]?>(null);
-        }
+            _logger.LogInformation("GetSolidWorksFileAsync called for ID: {DesignId}, Storage count: {Count}", id, _designStorage.Count);
+            _logger.LogInformation("Available design IDs: {Ids}", string.Join(", ", _designStorage.Keys.Select(k => k.ToString())));
+            
+            if (!_designStorage.TryGetValue(id, out var design))
+            {
+                _logger.LogWarning("Design not found in storage for ID: {DesignId}", id);
+                return Task.FromResult<byte[]?>(null);
+            }
 
-        var swBytes = _solidWorksEngine.GenerateSolidWorksFile(design);
-        return Task.FromResult<byte[]?>(swBytes);
+            _logger.LogInformation("Design found, generating SolidWorks file for ID: {DesignId}", id);
+            try
+            {
+                var swBytes = _solidWorksEngine.GenerateSolidWorksFile(design);
+                _logger.LogInformation("SolidWorks file generated successfully. Size: {Size} bytes", swBytes?.Length ?? 0);
+                return Task.FromResult<byte[]?>(swBytes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating SolidWorks file for design {DesignId}", id);
+                return Task.FromResult<byte[]?>(null);
+            }
+        }
     }
 }
 

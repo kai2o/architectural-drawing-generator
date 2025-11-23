@@ -2,6 +2,7 @@ using backend.Models;
 using netDxf;
 using netDxf.Entities;
 using netDxf.Tables;
+using System.Linq;
 
 namespace backend.Services;
 
@@ -9,19 +10,29 @@ public class CadEngineService : ICadEngineService
 {
     public byte[] GenerateDwgFile(RoomDesign design)
     {
+        // Create DXF document (netDxf creates valid DXF files by default)
+        // The default version is compatible with AutoCAD 2010+
         var dxf = new DxfDocument();
 
-        // Set up layers
+        // Set up layers with proper AutoCAD-compatible colors
         var wallLayer = new Layer("Walls") { Color = AciColor.Blue };
         var furnitureLayer = new Layer("Furniture") { Color = AciColor.Green };
         var dimensionsLayer = new Layer("Dimensions") { Color = AciColor.Red };
 
+        // Helper method to validate and clamp coordinates
+        double ValidateCoordinate(double value) => double.IsNaN(value) || double.IsInfinity(value) ? 0.0 : value;
+
         // Draw walls
         foreach (var wall in design.Walls)
         {
+            var startX = ValidateCoordinate(wall.StartPoint.X);
+            var startY = ValidateCoordinate(wall.StartPoint.Y);
+            var endX = ValidateCoordinate(wall.EndPoint.X);
+            var endY = ValidateCoordinate(wall.EndPoint.Y);
+            
             var line = new Line(
-                new netDxf.Vector3(wall.StartPoint.X, wall.StartPoint.Y, 0),
-                new netDxf.Vector3(wall.EndPoint.X, wall.EndPoint.Y, 0)
+                new netDxf.Vector3(startX, startY, 0),
+                new netDxf.Vector3(endX, endY, 0)
             );
             line.Layer = wallLayer;
             dxf.Entities.Add(line);
@@ -34,17 +45,19 @@ public class CadEngineService : ICadEngineService
                     Math.Pow(wall.EndPoint.Y - wall.StartPoint.Y, 2)
                 );
 
-                var openingX = wall.StartPoint.X + (wall.EndPoint.X - wall.StartPoint.X) * opening.Position;
-                var openingY = wall.StartPoint.Y + (wall.EndPoint.Y - wall.StartPoint.Y) * opening.Position;
+                var openingX = startX + (endX - startX) * ValidateCoordinate(opening.Position);
+                var openingY = startY + (endY - startY) * ValidateCoordinate(opening.Position);
+                var openingWidth = ValidateCoordinate(opening.Width);
+                var openingHeight = ValidateCoordinate(opening.Height);
 
                 // Draw opening as a rectangle
                 var openingRect = new Polyline2D(
                     new[]
                     {
-                        new Vector2(openingX - opening.Width / 2, openingY),
-                        new Vector2(openingX + opening.Width / 2, openingY),
-                        new Vector2(openingX + opening.Width / 2, openingY + opening.Height),
-                        new Vector2(openingX - opening.Width / 2, openingY + opening.Height)
+                        new Vector2(openingX - openingWidth / 2, openingY),
+                        new Vector2(openingX + openingWidth / 2, openingY),
+                        new Vector2(openingX + openingWidth / 2, openingY + openingHeight),
+                        new Vector2(openingX - openingWidth / 2, openingY + openingHeight)
                     },
                     true
                 );
@@ -56,21 +69,27 @@ public class CadEngineService : ICadEngineService
         // Draw furniture
         foreach (var furniture in design.Furniture)
         {
+            var fX = ValidateCoordinate(furniture.X);
+            var fY = ValidateCoordinate(furniture.Y);
+            var fWidth = ValidateCoordinate(furniture.Width);
+            var fDepth = ValidateCoordinate(furniture.Depth);
+            
             var rect = new Polyline2D(
                 new[]
                 {
-                    new Vector2(furniture.X, furniture.Y),
-                    new Vector2(furniture.X + furniture.Width, furniture.Y),
-                    new Vector2(furniture.X + furniture.Width, furniture.Y + furniture.Depth),
-                    new Vector2(furniture.X, furniture.Y + furniture.Depth)
+                    new Vector2(fX, fY),
+                    new Vector2(fX + fWidth, fY),
+                    new Vector2(fX + fWidth, fY + fDepth),
+                    new Vector2(fX, fY + fDepth)
                 },
                 true
             );
             rect.Layer = furnitureLayer;
             dxf.Entities.Add(rect);
 
-            // Add text label
-            var text = new Text(furniture.Name, new Vector2(furniture.X + furniture.Width / 2, furniture.Y + furniture.Depth / 2), 0.2);
+            // Add text label (ensure text is not empty or null)
+            var furnitureName = string.IsNullOrWhiteSpace(furniture.Name) ? "Furniture" : furniture.Name;
+            var text = new Text(furnitureName, new Vector2(fX + fWidth / 2, fY + fDepth / 2), 0.2);
             text.Layer = furnitureLayer;
             dxf.Entities.Add(text);
         }
@@ -80,13 +99,18 @@ public class CadEngineService : ICadEngineService
         {
             foreach (var counter in design.KitchenLayout.Counters)
             {
+                var cX = ValidateCoordinate(counter.X);
+                var cY = ValidateCoordinate(counter.Y);
+                var cLength = ValidateCoordinate(counter.Length);
+                var cDepth = ValidateCoordinate(counter.Depth);
+                
                 var counterRect = new Polyline2D(
                     new[]
                     {
-                        new Vector2(counter.X, counter.Y),
-                        new Vector2(counter.X + counter.Length, counter.Y),
-                        new Vector2(counter.X + counter.Length, counter.Y + counter.Depth),
-                        new Vector2(counter.X, counter.Y + counter.Depth)
+                        new Vector2(cX, cY),
+                        new Vector2(cX + cLength, cY),
+                        new Vector2(cX + cLength, cY + cDepth),
+                        new Vector2(cX, cY + cDepth)
                     },
                     true
                 );
@@ -98,13 +122,18 @@ public class CadEngineService : ICadEngineService
         // Draw storage units
         foreach (var storage in design.StorageUnits)
         {
+            var sX = ValidateCoordinate(storage.X);
+            var sY = ValidateCoordinate(storage.Y);
+            var sWidth = ValidateCoordinate(storage.Width);
+            var sDepth = ValidateCoordinate(storage.Depth);
+            
             var storageRect = new Polyline2D(
                 new[]
                 {
-                    new Vector2(storage.X, storage.Y),
-                    new Vector2(storage.X + storage.Width, storage.Y),
-                    new Vector2(storage.X + storage.Width, storage.Y + storage.Depth),
-                    new Vector2(storage.X, storage.Y + storage.Depth)
+                    new Vector2(sX, sY),
+                    new Vector2(sX + sWidth, sY),
+                    new Vector2(sX + sWidth, sY + sDepth),
+                    new Vector2(sX, sY + sDepth)
                 },
                 true
             );
@@ -113,16 +142,33 @@ public class CadEngineService : ICadEngineService
         }
 
         // Add room dimensions (simplified - using text annotation instead)
-        var dimText = new Text($"Length: {design.Length}m x Breadth: {design.Breadth}m", 
-            new Vector2(design.Length / 2, -0.5), 0.3);
+        var roomLength = ValidateCoordinate(design.Length);
+        var roomBreadth = ValidateCoordinate(design.Breadth);
+        var dimText = new Text($"Length: {roomLength:F2}m x Breadth: {roomBreadth:F2}m", 
+            new Vector2(roomLength / 2, -0.5), 0.3);
         dimText.Layer = dimensionsLayer;
         dxf.Entities.Add(dimText);
 
-        // Save to memory stream as DXF (netDxf saves as DXF, which is compatible with DWG viewers)
+        // Save to memory stream as DXF format (AutoCAD-compatible)
+        // Note: We always add at least the dimension text, so entities will always exist
+        // Note: netDxf generates DXF files, which AutoCAD can open directly
         using var stream = new MemoryStream();
+        
+        // Save with ASCII format for maximum compatibility (binary DXF can have issues)
+        // netDxf.Save() by default saves as ASCII DXF which is more compatible
         dxf.Save(stream);
+        
+        // Ensure stream is properly positioned
         stream.Position = 0;
-        return stream.ToArray();
+        var fileBytes = stream.ToArray();
+        
+        // Validate that we have actual content
+        if (fileBytes.Length == 0)
+        {
+            throw new InvalidOperationException("Generated CAD file is empty");
+        }
+        
+        return fileBytes;
     }
 }
 

@@ -106,15 +106,31 @@ public class DesignController : ControllerBase
     [HttpGet("{id}/download/cad")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DownloadCad(Guid id)
     {
-        var cadBytes = await _designService.GetCadFileAsync(id);
-        if (cadBytes == null)
+        try
         {
-            return NotFound($"Design with ID {id} not found");
-        }
+            _logger.LogInformation("Download CAD file requested for design ID: {DesignId}", id);
+            var cadBytes = await _designService.GetCadFileAsync(id);
+            if (cadBytes == null || cadBytes.Length == 0)
+            {
+                _logger.LogWarning("CAD file not found or empty for design ID: {DesignId}", id);
+                return NotFound(new { message = "Design not found or CAD file could not be generated", designId = id });
+            }
 
-        return File(cadBytes, "application/acad", $"design_{id}.dwg");
+            _logger.LogInformation("CAD file generated successfully for design ID: {DesignId}, size: {Size} bytes", id, cadBytes.Length);
+            
+            // Return as DXF file (netDxf generates DXF format)
+            // AutoCAD can open DXF files - using .dxf extension for accuracy
+            // MIME type: application/dxf or image/vnd.dxf both work, but application/dxf is more standard
+            return File(cadBytes, "application/dxf", $"design_{id}.dxf");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating CAD file for design ID: {DesignId}", id);
+            return StatusCode(500, new { message = "An error occurred while generating the CAD file", error = ex.Message });
+        }
     }
 
     /// <summary>
@@ -123,15 +139,27 @@ public class DesignController : ControllerBase
     [HttpGet("{id}/download/solidworks")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DownloadSolidWorks(Guid id)
     {
-        var swBytes = await _designService.GetSolidWorksFileAsync(id);
-        if (swBytes == null)
+        try
         {
-            return NotFound($"Design with ID {id} not found");
-        }
+            _logger.LogInformation("Download SolidWorks file requested for design ID: {DesignId}", id);
+            var swBytes = await _designService.GetSolidWorksFileAsync(id);
+            if (swBytes == null || swBytes.Length == 0)
+            {
+                _logger.LogWarning("SolidWorks file not found or empty for design ID: {DesignId}", id);
+                return NotFound(new { message = "Design not found or SolidWorks file could not be generated", designId = id });
+            }
 
-        return File(swBytes, "application/step", $"design_{id}.step");
+            _logger.LogInformation("SolidWorks file generated successfully for design ID: {DesignId}, size: {Size} bytes", id, swBytes.Length);
+            return File(swBytes, "application/step", $"design_{id}.step");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating SolidWorks file for design ID: {DesignId}", id);
+            return StatusCode(500, new { message = "An error occurred while generating the SolidWorks file", error = ex.Message });
+        }
     }
 
     /// <summary>
