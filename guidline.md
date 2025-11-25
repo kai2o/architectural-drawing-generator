@@ -1,286 +1,204 @@
-Home Interior Designer Automation Website
+Project title: ArchAID — AI-Powered Home & Corporate Space Designer + Marketplace
+Core: 2D/3D layout generator • CAD/STEP/SolidWorks exports • AI optimizer • Multi-persona marketplace
 
-Tech Stack: Angular (Frontend) + .NET Core OR Java Spring Boot (Backend)
-Output Formats: CAD (.dwg) + SolidWorks (.sldprt / .sldasm)
-Core Function: Autogenerate room designs & floor plans based on user-provided dimensions.
+Important: Planner5D inspiration (key UI/UX features to emulate)
 
-SYSTEM INSTRUCTIONS FOR CURSOR
+Use the following Planner5D UI and feature set as the primary UX inspiration:
 
-You are building a full-stack web application that automates the job of a home designer/architect.
-Your output must include:
+Fast floor-plan creation and AI floor-plan recognition. 
+Planner 5D
 
-Angular frontend
+Extensive furniture & decor library (thousands of items) for drag-and-drop furnishing. 
+Planner 5D
 
-Backend (choose .NET Core 8 or Java Spring Boot depending on my command)
+High-quality visualizations and 4K renders + 360° walkthrough mode. 
+Planner 5D
 
-Architecture diagrams
+Cross-platform availability (web, mobile, desktop) and AR/preview where possible. 
+Planner 5D
 
-API design
+Use these features as a UX baseline; add marketplace + monetization + CAD/STEP export + multi-floor/corporate specificity on top.
 
-Data models
+0 — Global instruction to Cursor (summary)
 
-CAD + SolidWorks file generation logic
+Build the full-stack ArchAID platform and make the Angular frontend match Planner5D’s intuitive canvas-first UX with the following additions: full-house & multi-floor management, corporate partition/cabin tools, user-defined exceptions (mandir, server room), an AI optimizer microservice, a marketplace for architects/vendors with monetization, and a robust CAD/STEP export pipeline. Prioritize .NET Core 8 backend.
 
-Export modules
+1 — Planner5D-inspired Frontend UX (exact requirements for Cursor)
 
-Clean file structure
+Implement an Angular UI that includes these Planner5D-style modules and behaviors:
 
-Working code templates
+Canvas-first design workspace
 
-Dummy sample outputs
+Central resizable canvas with 2D floorplan editing and instant toggle to 3D view (Three.js).
 
-Follow clean-code principles, SOLID and modular architecture.
+Snap-to-grid, rulers, measurement guides, and live measurement readouts.
 
-✅ PROJECT TITLE:
+Undo/redo stack, multicursor selection, group/ungroup, align & distribute actions.
 
-AI-Powered Home Designer & Floor Plan Generator
+Multi-floor manager: a persistent floor selector showing thumbnails for each floor; changes sync across floors.
 
-📌 PROJECT DESCRIPTION
+Left toolbar (toolset) — emulate Planner5D flow:
 
-Build a web application where users enter:
+Draw tools: wall, door, window, column, beam, staircase, floor cutouts.
 
-Room length (m)
+Room tool: auto-fill a bounded polygon and set room type (bedroom, kitchen, server room, mandir, etc.).
 
-Room breadth (m)
+Partition/cabin generator for corporate layouts (snap to grid, modular widths).
 
-Room height (m)
+Measurement tool + dimension annotation.
 
-Optional: purpose (bedroom/living/kitchen), number of occupants, style preference.
+Right panel (properties & inspector):
 
-The system must automatically generate:
+Contextual properties: dimensions, rotation, material, layer, tags, clearance constraints (e.g., maintain 900mm).
 
-Optimized layout suggestion (space management, furniture placement)
+For special rooms (server room, mandir) show extra policy toggles (e.g., Vastu orientation, rack spacing).
 
-Kitchen counters or cabinets, if applicable
+Bottom / Docked catalog (object library):
 
-Storage recommendations
+Large searchable library of furniture & decor. Provide categories, filters (by vendor, price, style), and thumbnails.
 
-3D Model of the room design
+Drag-and-drop from library into canvas; when placed, object opens a properties card (dimensions, vendor info, CAD/STEP links).
 
-2D architectural floor plan
+Collections / mood boards feature (save a set of items as a palette).
 
-Export in:
+Top action bar:
 
-CAD format (.dwg)
+Project metadata (name, floors, area), collaboration/share button, preview, render, export.
 
-SolidWorks format (.sldprt / .sldasm)
+Quick switches: 2D/3D toggle, measurement units (m / ft), grid size, snap on/off.
 
-Use a geometry engine + rule-based design system + basic AI logic for layout generation.
+3D viewer (Three.js):
 
-🔧 CORE FEATURES
-1. Input Module
+Real-time conversion of 2D geometry -> 3D (extrude walls, place objects).
 
-Angular form that accepts:
+Walkthrough / 360º mode and camera presets (isometric, first-person, top).
 
-Length
+Material editor (change finishes and lighting intensity) and 4K render button.
 
-Breadth
+AI Assistant panel:
 
-Height
+“Generate layout” button for a selected floor or entire building, with options for rule-based/ML hybrid, style, and constraints.
 
-Room Type (bedroom/living/kitchen/bathroom/custom)
+Shows 3 candidate layouts with scores + rationales (space efficiency, ergonomics, cost).
 
-Optional design preferences
+“Auto-furnish” option (populate rooms using vendor items from marketplace) and “Optimize” (re-run optimizer after manual edits).
 
-2. AI Layout Engine
+Templates & Gallery:
 
-Backend service processes dimensions and generates:
+Template library (rooms, floor plans, commercial shells) with thumbnail previews and “use template” action.
 
-Coordinates for walls
+Floorplan import (upload image/PDF) → AI floorplan recognition to convert to editable geometry (Planner5D feature inspiration). 
+Planner 5D
 
-Furniture placement
+Shop / Vendor Panels:
 
-Storage layout
+In-object vendor badge / preview showing vendor, SKU, and “Buy” or “Request quote”.
 
-Kitchen counter placement
+“Add to project” vs “Place-to-buy” behavior for vendor items.
 
-Door/window suggestions
+Performance & Progressive Enhancement:
 
-Use procedural geometry algorithms:
+Lazy load large catalogs, progressive glTF streaming for large scenes, web worker offloading for geometry operations.
 
-Space optimization
+Mobile-friendly UI modes (condensed toolbar, simplified property inspector), inspired by Planner5D cross-platform approach. 
+Planner 5D
 
-Grid partitioning
+2 — Planner5D UX → Backend + API mapping (Cursor must implement)
 
-Minimum clearance rules
+Map the UI to these APIs / backend behaviors (additions to your API list):
 
-Work triangle logic (for kitchens)
+POST /api/project/{id}/floor/{floorId}/ai/generate — returns candidate layouts & score.
 
-3. CAD & SolidWorks File Generation
+POST /api/project/{id}/import/floorplan — accepts image/PDF, runs AI floorplan recognition, returns editable geometry. (Planner5D feature inspiration). 
+Planner 5D
 
-Backend must export files using CAD libraries:
+GET /api/library/items?filter=vendor|style|category — paged item library.
 
-Use netDxf (for .NET) OR Java LibreDWG / DXFWriter (for Java)
+POST /api/library/items/{id}/place — reserves vendor item or returns purchase flow.
 
-Generate parametric SolidWorks files using:
+GET /api/project/{id}/preview/360 — signed URL / tile stream for walkthrough.
 
-.NET: SolidWorks API via interop
+Keep previously described endpoints (design/generate, export, marketplace) but ensure performance/streaming endpoints for 3D.
 
-Java: Export STEP (.step) then convert to SolidWorks-compatible format
+3 — UI Patterns & Interaction Details for Cursor (exact deliverables)
 
-4. Angular UI/UX
+Object placement UX: snapping guidelines, minimum clearance red/green indicators while dragging, smart pivot handles, rotate by degrees input, fine-grain keyboard nudging.
 
-**Note: This project uses Bootstrap 5 for styling. Custom CSS should only be written when absolutely necessary. Prefer Bootstrap utility classes and components for all UI elements.**
+Measurements & Labels: on-hover dimension labels for walls/rooms; toggle to show/hide annotations.
 
-Modules required:
+Multi-select & batch-edit: change material/finish or vendor for multiple items at once.
 
-Input form page
+Versioning & Revisions: save revisions per project; “compare revisions” UI and ability to roll back.
 
-2D floor plan preview
+Share & Collaboration: generate share links (view-only / edit) and comments on objects (issue tracking like BCF).
 
-3D rendering (use Three.js)
+Render Queue: async rendering with progress, downloadable 4K assets when ready.
 
-Download section for CAD + SolidWorks outputs
+4 — Marketplace & Monetization (how UI differs from Planner5D)
 
-"Regenerate design" option
+Planner5D has a large library & shop features; for ArchAID, Cursor must deliver:
 
-5. Backend API Endpoints
-POST /api/design/generate
-GET  /api/design/{id}/download/cad
-GET  /api/design/{id}/download/solidworks
-GET  /api/design/{id}/preview/2d
-GET  /api/design/{id}/preview/3d
+Vendor onboarding flow, SKU management, stock & pricing UI.
 
-🏗️ ARCHITECTURE
+In-canvas vendor badges & direct purchase flows — placing an item into a project can optionally trigger a “add to cart” with vendor SKU.
 
-Generate for me:
+Architect listing flow: designers can upload parametric templates and set license/pricing (single-use, subscription, royalty).
 
-High-level system architecture diagram
+Payout interface, analytics dashboards for vendors & architects.
 
-Component diagram
+(These are new features — present them as distinct panels & flows in the UI; keep the core Planner5D-style object catalog as the foundation.)
 
-Backend controller-service-repository structure
+5 — Design tokens, visual system & assets (exact spec)
 
-Frontend module/component/service layout
+Adopt Planner5D’s approach to clean, iconographic UI but apply ArchAID brand tokens. Base styling on Bootstrap components; only add lightweight external/custom CSS when absolutely necessary—Tailwind.css is not part of this stack:
 
-Database schema (if using DB)
+Grid & canvas: light blueprint grid on canvas background, adjustable opacity.
 
-📁 PROJECT FILE STRUCTURE
+Primary colors: as earlier (Primary #2E86FF, Dark #0A1A2F, Accent #00D2D9).
 
-Ask Cursor to generate a structure like:
+Typography: Montserrat / Inter as before.
 
-Frontend (Angular)
-/src  
- ├── app  
- │    ├── components  
- │    ├── pages  
- │    ├── services  
- │    ├── models  
- │    └── utils
- ├── assets  
- └── environments
+Iconography: line icons; use blueprint/architectural icons for drawing tools.
 
-Backend
+Animations: subtle micro-interactions for drag & drop, placement previews and AI suggestions.
 
-For .NET:
+6 — Cross-platform & offline sync
 
-/src  
- ├── Controllers  
- ├── Services  
- ├── Repositories  
- ├── Models  
- ├── DTOs  
- ├── CADEngine  
- ├── SolidWorksEngine  
- └── Helpers
+Planner5D offers apps across platforms; Cursor’s output must include:
 
+App shell that supports progressive web app (PWA) features, offline project caching, and sync.
 
-For Java Spring Boot:
+Mobile-friendly controls and a condensed catalog for touch interactions. 
+Planner 5D
 
-/src  
- ├── controller  
- ├── service  
- ├── repository  
- ├── model  
- ├── dto  
- ├── util  
- ├── cad  
- └── solidworks
+7 — Performance and scale notes (implementation guidance for Cursor)
 
-🤖 TASK FOR CURSOR
+Use web workers for heavy geometry ops (partitioning, boolean ops).
 
-Generate the complete full-stack application including:
+Stream glTF assets via signed URLs; preload assets likely to be used in scene.
 
-✔ Backend full code
+Paginate library queries; favor server-side filtering.
 
-API controllers
+Use background workers for CAD/STEP conversion and rendering (return job IDs).
 
-Services
+8 — Acceptance criteria (Planner5D parity + ArchAID uniqueness)
 
-CAD generation logic
+Cursor’s deliverable must satisfy:
 
-SolidWorks export logic
+UX parity with Planner5D’s core flows: fast floorplan creation, library-based furnishing, 2D/3D toggle, 360 walkthrough, AI floorplan recognition. 
+Planner 5D
 
-2D SVG/Canvas preview logic
+Added ArchAID features: marketplace + monetization, CAD/STEP export pipeline, multi-floor & corporate space rules, user-defined exceptions.
 
-3D model generation with vertices & meshes
+Angular app with the Canvas workspace, left toolbar, right inspector, bottom catalog, AI assistant panel and multi-floor manager — all interactive and wired to backend mock endpoints.
 
-DTOs & models
+.NET Core backend endpoints for AI import, generate, catalog, export queue and marketplace.
 
-Sample request & response
+Sample seed library (≥ 2 vendors, 50 sample items) and templates (multi-floor & corporate shells).
 
-✔ Frontend full code
+Documentation describing how Planner5D patterns were adapted (include screenshots or references).
 
-Angular components
+9 — Citations & resources used (Planner5D baseline)
 
-UI forms
-
-Three.js viewer
-
-CAD/SolidWorks download buttons
-
-REST API integration
-
-Beautiful responsive UI
-
-✔ Build scripts
-
-package.json
-
-Angular config
-
-.NET csproj / Java pom.xml
-
-✔ Documentation
-
-README.md
-
-How to run
-
-How CAD files are generated
-
-Example output files
-
-🧪 TESTING REQUIREMENTS
-
-Unit tests for services
-
-API tests
-
-UI e2e tests
-
-Sample CAD & STEP file exports
-
-📝 OUTPUT FORMAT (VERY IMPORTANT)
-
-Cursor must reply in this structure:
-
-Architecture Summary
-
-Frontend Code
-
-Backend Code
-
-CAD Generator Code
-
-SolidWorks Generator Code
-
-3D Rendering Code (Three.js)
-
-API Documentation (OpenAPI/Swagger)
-
-Test Cases
-
-Deployment Instructions
-
-Sample CAD + STEP output (text-based placeholders)
+Planner5D homepage — feature highlights (floor plan editor, 3D, AI floorplan recognition, large item library, 360 walkthrough & cross-platform). 
+Planner 5d
