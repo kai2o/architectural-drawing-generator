@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ArchAID.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+241273df6aa749f5aaabccdc1ce6d31b6307b9fa")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+30f9a573d3798f5cb41d4be07999059283690087")]
 [assembly: System.Reflection.AssemblyProductAttribute("ArchAID.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ArchAID.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

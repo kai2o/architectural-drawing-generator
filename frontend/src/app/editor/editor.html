@@ -52,7 +52,7 @@
           (click)="toggleSnap()"
           [title]="snapEnabled() ? 'Disable Snap to Grid' : 'Enable Snap to Grid'"
           [attr.aria-label]="snapEnabled() ? 'Disable Snap to Grid' : 'Enable Snap to Grid'">
-          <i class="bi" [ngClass]="snapEnabled() ? 'bi-grid-3x3-gap-fill' : 'bi-grid-3x3'"></i>
+          <i class="bi" [class.bi-grid-3x3-gap-fill]="snapEnabled()" [class.bi-grid-3x3]="!snapEnabled()"></i>
           <span class="btn-label">{{ snapEnabled() ? 'Snap On' : 'Snap Off' }}</span>
         </button>
         <select class="form-select form-select-sm" [ngModel]="gridSize()" (ngModelChange)="gridSize.set($event); updateGrid()" title="Grid Size">
@@ -229,25 +229,34 @@
     <div class="canvas-container">
       <div class="canvas-wrapper" #canvasContainer>
         <!-- 2D SVG Canvas -->
-        <svg 
-          *ngIf="viewMode() === '2d'"
-          #canvasSvg
-          class="canvas-svg"
-          (mousedown)="onCanvasMouseDown($event)"
-          (mousemove)="onCanvasMouseMove($event)"
-          (mouseup)="onCanvasMouseUp($event)"
-          (mouseleave)="onCanvasMouseLeave()">
-          <!-- Grid, walls, and rooms will be rendered here -->
-        </svg>
+        @if (viewMode() === '2d') {
+          <svg 
+            #canvasSvg
+            class="canvas-svg"
+            [class.cursor-crosshair]="activeTool() === 'wall' || activeTool() === 'room' || activeTool() === 'door' || activeTool() === 'window' || activeTool() === 'column' || activeTool() === 'staircase'"
+            [class.cursor-pointer]="activeTool() === 'select'"
+            [class.cursor-move]="activeTool() === 'measure'"
+            (mousedown)="onCanvasMouseDown($event)"
+            (mousemove)="onCanvasMouseMove($event)"
+            (mouseup)="onCanvasMouseUp($event)"
+            (mouseleave)="onCanvasMouseLeave()"
+            (dragover)="onCanvasDragOver($event)"
+            (drop)="onCanvasDrop($event)"
+            (dragleave)="onCanvasDragLeave($event)">
+            <!-- Grid, walls, and rooms will be rendered here -->
+          </svg>
+        }
         
         <!-- 3D Canvas Placeholder -->
-        <div *ngIf="viewMode() === '3d'" class="canvas-placeholder" id="editor-canvas">
-          <div class="canvas-message">
-            <i class="bi bi-box-arrow-up-right" style="font-size: 3rem; color: var(--archaid-text-secondary);"></i>
-            <p>3D View</p>
-            <small>3D rendering will be implemented in Task 7</small>
+        @if (viewMode() === '3d') {
+          <div class="canvas-placeholder" id="editor-canvas">
+            <div class="canvas-message">
+              <i class="bi bi-box-arrow-up-right" style="font-size: 3rem; color: var(--archaid-text-secondary);"></i>
+              <p>3D View</p>
+              <small>3D rendering will be implemented in Task 7</small>
+            </div>
           </div>
-        </div>
+        }
         
         <!-- Canvas Overlay Controls -->
         <div class="canvas-overlay">
@@ -260,9 +269,9 @@
               <i class="bi bi-zoom-out"></i>
               <span class="zoom-label">−</span>
             </button>
-            <button class="btn btn-sm btn-light zoom-btn" type="button" (click)="resetZoom()" title="Reset Zoom (100%)">
+            <button class="btn btn-sm btn-light zoom-btn" type="button" (click)="resetZoom()" [title]="'Reset Zoom (' + zoomPercentage() + ')'">
               <i class="bi bi-arrows-angle-contract"></i>
-              <span class="zoom-label">100%</span>
+              <span class="zoom-label">{{ zoomPercentage() }}</span>
             </button>
           </div>
           
@@ -270,35 +279,39 @@
             <button class="btn btn-sm btn-primary" type="button" (click)="addFloor()" title="Add Floor">
               <i class="bi bi-plus-circle"></i> Add Floor
             </button>
-            <div class="floor-thumbnails" *ngIf="floors().length > 0">
-              <div 
-                class="floor-thumb"
-                *ngFor="let floor of floors(); let i = index"
-                [class.active]="currentFloorIndex() === i"
-                [title]="floor.name">
-                <button 
-                  class="floor-delete-btn"
-                  type="button"
-                  (click)="deleteFloor(i, $event)"
-                  [disabled]="floors().length === 1"
-                  [title]="floors().length === 1 ? 'Cannot delete the last floor' : 'Delete floor'"
-                  [attr.aria-label]="'Delete ' + floor.name">
-                  <i class="bi bi-x-lg"></i>
-                </button>
-                <div class="floor-thumb-content" (click)="switchFloor(i)">
-                  <div class="floor-thumb-preview" *ngIf="floor.thumbnail; else noThumbnail">
-                    <img [src]="floor.thumbnail" [alt]="floor.name + ' preview'" />
-                  </div>
-                  <ng-template #noThumbnail>
-                    <div class="floor-thumb-placeholder">
-                      <i class="bi bi-layers"></i>
+            @if (floors().length > 0) {
+              <div class="floor-thumbnails">
+                @for (floor of floors(); track floor.id; let i = $index) {
+                  <div 
+                    class="floor-thumb"
+                    [class.active]="currentFloorIndex() === i"
+                    [title]="floor.name">
+                    <button 
+                      class="floor-delete-btn"
+                      type="button"
+                      (click)="deleteFloor(i, $event)"
+                      [disabled]="floors().length === 1"
+                      [title]="floors().length === 1 ? 'Cannot delete the last floor' : 'Delete floor'"
+                      [attr.aria-label]="'Delete ' + floor.name">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    <div class="floor-thumb-content" (click)="switchFloor(i)">
+                      @if (floor.thumbnail) {
+                        <div class="floor-thumb-preview">
+                          <img [src]="floor.thumbnail" [alt]="floor.name + ' preview'" />
+                        </div>
+                      } @else {
+                        <div class="floor-thumb-placeholder">
+                          <i class="bi bi-layers"></i>
+                        </div>
+                      }
+                      <span class="floor-number">{{ i + 1 }}</span>
+                      <small>{{ floor.name }}</small>
                     </div>
-                  </ng-template>
-                  <span class="floor-number">{{ i + 1 }}</span>
-                  <small>{{ floor.name }}</small>
-                </div>
+                  </div>
+                }
               </div>
-            </div>
+            }
           </div>
         </div>
       </div>
@@ -313,68 +326,74 @@
         </button>
       </div>
       
-      <div class="inspector-content" *ngIf="!inspectorCollapsed()">
-        <div *ngIf="selectedItem(); else noSelection" class="inspector-form">
-          <div class="form-group">
-            <label>Item Type</label>
-            <input type="text" class="form-control form-control-sm" [value]="selectedItem()!.type" readonly>
-          </div>
-          
-          <div class="form-group">
-            <label>Dimensions</label>
-            <div class="d-flex gap-2">
-              <input type="number" class="form-control form-control-sm" placeholder="Length" [ngModel]="selectedItem()!.length" (ngModelChange)="updateSelectedItem('length', $event)">
-              <input type="number" class="form-control form-control-sm" placeholder="Width" [ngModel]="selectedItem()!.width" (ngModelChange)="updateSelectedItem('width', $event)">
-              <input type="number" class="form-control form-control-sm" placeholder="Height" [ngModel]="selectedItem()!.height" (ngModelChange)="updateSelectedItem('height', $event)">
+      @if (!inspectorCollapsed()) {
+        <div class="inspector-content">
+          @if (selectedItem()) {
+            <div class="inspector-form">
+              <div class="form-group">
+                <label>Item Type</label>
+                <input type="text" class="form-control form-control-sm" [value]="selectedItem()!.type" readonly>
+              </div>
+              
+              <div class="form-group">
+                <label>Dimensions</label>
+                <div class="d-flex gap-2">
+                  <input type="number" class="form-control form-control-sm" placeholder="Length" [ngModel]="selectedItem()!.length" (ngModelChange)="updateSelectedItem('length', $event)">
+                  <input type="number" class="form-control form-control-sm" placeholder="Width" [ngModel]="selectedItem()!.width" (ngModelChange)="updateSelectedItem('width', $event)">
+                  <input type="number" class="form-control form-control-sm" placeholder="Height" [ngModel]="selectedItem()!.height" (ngModelChange)="updateSelectedItem('height', $event)">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Rotation</label>
+                <input type="number" class="form-control form-control-sm" placeholder="Degrees" [ngModel]="selectedItem()!.rotation" (ngModelChange)="updateSelectedItem('rotation', $event)">
+              </div>
+
+              @if (selectedItem()!.type === 'room') {
+                <div class="form-group">
+                  <label>Room Type</label>
+                  <select 
+                    class="form-select form-select-sm" 
+                    [ngModel]="selectedItem()!.roomType || 'other'" 
+                    (ngModelChange)="updateRoomType(selectedItem()!.id!, $event); updateSelectedItem('roomType', $event)">
+                    @for (roomType of roomTypes; track roomType.value) {
+                      <option [value]="roomType.value">
+                        {{ roomType.label }}
+                      </option>
+                    }
+                  </select>
+                </div>
+              }
+
+              <div class="form-group">
+                <label>Layer</label>
+                <select class="form-select form-select-sm" [ngModel]="selectedItem()!.layer" (ngModelChange)="updateSelectedItem('layer', $event)">
+                  <option value="walls">Walls</option>
+                  <option value="furniture">Furniture</option>
+                  <option value="decor">Decor</option>
+                  <option value="annotations">Annotations</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Clearance</label>
+                <input type="number" class="form-control form-control-sm" placeholder="mm" [ngModel]="selectedItem()!.clearance" (ngModelChange)="updateSelectedItem('clearance', $event)">
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-sm btn-primary w-100" type="button">Apply Changes</button>
+                <button class="btn btn-sm btn-outline-danger w-100" type="button" (click)="deleteSelectedItem()">Delete</button>
+              </div>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label>Rotation</label>
-            <input type="number" class="form-control form-control-sm" placeholder="Degrees" [ngModel]="selectedItem()!.rotation" (ngModelChange)="updateSelectedItem('rotation', $event)">
-          </div>
-
-          <div class="form-group" *ngIf="selectedItem()!.type === 'room'">
-            <label>Room Type</label>
-            <select 
-              class="form-select form-select-sm" 
-              [ngModel]="selectedItem()!.roomType || 'other'" 
-              (ngModelChange)="updateRoomType(selectedItem()!.id!, $event); updateSelectedItem('roomType', $event)">
-              <option *ngFor="let roomType of roomTypes" [value]="roomType.value">
-                {{ roomType.label }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Layer</label>
-            <select class="form-select form-select-sm" [ngModel]="selectedItem()!.layer" (ngModelChange)="updateSelectedItem('layer', $event)">
-              <option value="walls">Walls</option>
-              <option value="furniture">Furniture</option>
-              <option value="decor">Decor</option>
-              <option value="annotations">Annotations</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Clearance</label>
-            <input type="number" class="form-control form-control-sm" placeholder="mm" [ngModel]="selectedItem()!.clearance" (ngModelChange)="updateSelectedItem('clearance', $event)">
-          </div>
-
-          <div class="form-actions">
-            <button class="btn btn-sm btn-primary w-100" type="button">Apply Changes</button>
-            <button class="btn btn-sm btn-outline-danger w-100" type="button" (click)="deleteSelectedItem()">Delete</button>
-          </div>
+          } @else {
+            <div class="no-selection">
+              <i class="bi bi-info-circle"></i>
+              <p>No item selected</p>
+              <small>Click on an object to view properties</small>
+            </div>
+          }
         </div>
-        
-        <ng-template #noSelection>
-          <div class="no-selection">
-            <i class="bi bi-info-circle"></i>
-            <p>No item selected</p>
-            <small>Click on an object to view properties</small>
-          </div>
-        </ng-template>
-      </div>
+      }
     </div>
   </div>
 
@@ -410,22 +429,30 @@
       </button>
     </div>
     
-    <div class="catalog-content" *ngIf="!catalogCollapsed()">
-      <div class="catalog-grid">
-        <div class="catalog-item" *ngFor="let item of catalogItems()" draggable="true" (dragstart)="onDragStart($event, item)">
-          <div class="item-thumbnail">
-            <i class="bi bi-box" style="font-size: 2rem;"></i>
-          </div>
-          <div class="item-info">
-            <strong>{{ item.name }}</strong>
-            <small>{{ item.category }}</small>
-            <small class="text-primary" *ngIf="item.vendor">{{ item.vendor }}</small>
-          </div>
+    @if (!catalogCollapsed()) {
+      <div class="catalog-content">
+        <div class="catalog-grid">
+          @for (item of catalogItems(); track item.id) {
+            <div class="catalog-item" draggable="true" (dragstart)="onDragStart($event, item)">
+              <div class="item-thumbnail">
+                <i class="bi bi-box" style="font-size: 2rem;"></i>
+              </div>
+              <div class="item-info">
+                <strong>{{ item.name }}</strong>
+                <small>{{ item.category }}</small>
+                @if (item.vendor) {
+                  <small class="text-primary">{{ item.vendor }}</small>
+                }
+              </div>
+            </div>
+          }
         </div>
+        @if (catalogItems().length === 0) {
+          <div class="catalog-empty">
+            <p>No items found. Catalog will be populated in Task 15.</p>
+          </div>
+        }
       </div>
-      <div class="catalog-empty" *ngIf="catalogItems().length === 0">
-        <p>No items found. Catalog will be populated in Task 15.</p>
-      </div>
-    </div>
+    }
   </div>
 </div>

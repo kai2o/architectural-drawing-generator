@@ -9,6 +9,11 @@ interface Floor {
   index: number;
   walls: Wall[];
   rooms: Room[];
+  doors: Door[];
+  windows: Window[];
+  columns: Column[];
+  staircases: Staircase[];
+  components: PlacedComponent[]; // For catalog items
   thumbnail?: string; // Base64 thumbnail preview
 }
 
@@ -53,6 +58,51 @@ interface Room {
   center: Point;
 }
 
+interface Door {
+  id: string;
+  position: Point;
+  rotation: number;
+  width: number;
+  height: number;
+  wallId?: string; // Reference to wall it's placed on
+}
+
+interface Window {
+  id: string;
+  position: Point;
+  rotation: number;
+  width: number;
+  height: number;
+  wallId?: string; // Reference to wall it's placed on
+}
+
+interface Column {
+  id: string;
+  position: Point;
+  diameter: number;
+  height: number;
+}
+
+interface Staircase {
+  id: string;
+  position: Point;
+  rotation: number;
+  width: number;
+  length: number;
+  direction: 'up' | 'down';
+}
+
+interface PlacedComponent {
+  id: string;
+  type: string;
+  position: Point;
+  rotation: number;
+  width: number;
+  height: number;
+  depth?: number;
+  catalogItemId?: string; // Reference to catalog item
+}
+
 type ViewMode = '2d' | '3d';
 type ActiveTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'staircase' | 'room' | 'partition' | 'measure';
 
@@ -76,7 +126,18 @@ export class Editor implements AfterViewInit {
   
   // Floor Management
   floors = signal<Floor[]>([
-    { id: '1', name: 'Ground Floor', index: 0, walls: [], rooms: [] }
+    { 
+      id: '1', 
+      name: 'Ground Floor', 
+      index: 0, 
+      walls: [], 
+      rooms: [],
+      doors: [],
+      windows: [],
+      columns: [],
+      staircases: [],
+      components: []
+    }
   ]);
   currentFloorIndex = signal<number>(0);
   
@@ -101,6 +162,11 @@ export class Editor implements AfterViewInit {
   
   // Zoom level
   zoomLevel = signal<number>(1);
+  
+  // Computed: Format zoom level as percentage
+  zoomPercentage = computed(() => {
+    return Math.round(this.zoomLevel() * 100) + '%';
+  });
 
   // 2D Drawing State - computed from current floor
   walls = computed(() => {
@@ -112,9 +178,37 @@ export class Editor implements AfterViewInit {
     const floor = this.floors()[this.currentFloorIndex()];
     return floor ? floor.rooms : [];
   });
+
+  doors = computed(() => {
+    const floor = this.floors()[this.currentFloorIndex()];
+    return floor ? floor.doors : [];
+  });
+
+  windows = computed(() => {
+    const floor = this.floors()[this.currentFloorIndex()];
+    return floor ? floor.windows : [];
+  });
+
+  columns = computed(() => {
+    const floor = this.floors()[this.currentFloorIndex()];
+    return floor ? floor.columns : [];
+  });
+
+  staircases = computed(() => {
+    const floor = this.floors()[this.currentFloorIndex()];
+    return floor ? floor.staircases : [];
+  });
+
+  components = computed(() => {
+    const floor = this.floors()[this.currentFloorIndex()];
+    return floor ? floor.components : [];
+  });
+
   isDrawing = signal<boolean>(false);
   currentWallStart = signal<Point | null>(null);
   currentWallEnd = signal<Point | null>(null);
+  isPlacingComponent = signal<boolean>(false);
+  componentToPlace = signal<PlacedComponent | null>(null);
   canvasOffset = signal<Point>({ x: 0, y: 0 });
   canvasPan = signal<Point>({ x: 0, y: 0 });
   showGrid = signal<boolean>(true);
@@ -154,6 +248,64 @@ export class Editor implements AfterViewInit {
       effect(() => {
         if (this.viewMode() === '2d') {
           this.updateGrid();
+        }
+      });
+
+      // Effect to re-render walls when they change
+      effect(() => {
+        if (this.viewMode() === '2d') {
+          const walls = this.walls();
+          // Use setTimeout to ensure DOM is ready
+          setTimeout(() => {
+            this.renderWalls();
+          }, 0);
+        }
+      });
+
+      // Effect to re-render rooms when they change
+      effect(() => {
+        if (this.viewMode() === '2d') {
+          const rooms = this.rooms();
+          // Use setTimeout to ensure DOM is ready
+          setTimeout(() => {
+            this.renderRooms();
+          }, 0);
+        }
+      });
+
+      // Effect to re-render doors, windows, columns, staircases, and components
+      effect(() => {
+        if (this.viewMode() === '2d') {
+          setTimeout(() => {
+            this.renderDoors();
+            this.renderWindows();
+            this.renderColumns();
+            this.renderStaircases();
+            this.renderComponents();
+          }, 0);
+        }
+      });
+
+      // Effect to re-initialize canvas when view mode changes to 2D
+      effect(() => {
+        if (this.viewMode() === '2d') {
+          setTimeout(() => {
+            this.initializeCanvas();
+          }, 100);
+        }
+      });
+
+      // Effect to apply zoom when zoom level changes (only if canvas is initialized)
+      effect(() => {
+        const zoom = this.zoomLevel();
+        const viewMode = this.viewMode();
+        if (viewMode === '2d' && zoom !== undefined && this.canvasSvg?.nativeElement) {
+          // Use a small delay to avoid infinite loops
+          setTimeout(() => {
+            if (this.viewMode() === '2d') {
+              this.applyZoom();
+            }
+          }, 10);
         }
       });
 
@@ -233,13 +385,18 @@ export class Editor implements AfterViewInit {
 
   // View Mode Controls
   setViewMode(mode: ViewMode): void {
+    console.log('setViewMode called with mode:', mode, 'current mode:', this.viewMode());
     this.viewMode.set(mode);
+    console.log('viewMode updated to:', this.viewMode());
     // When switching to 3D, we'll need to convert 2D geometry
     if (mode === '3d') {
       console.log('Switching to 3D mode - geometry conversion will happen here');
     } else if (mode === '2d') {
       // Reinitialize canvas when switching back to 2D
-      setTimeout(() => this.initializeCanvas(), 0);
+      // Use a longer timeout to ensure @if block has rendered
+      setTimeout(() => {
+        this.initializeCanvas();
+      }, 150);
     }
   }
 
@@ -254,11 +411,15 @@ export class Editor implements AfterViewInit {
 
   // Snap & Grid Controls
   toggleSnap(): void {
+    console.log('toggleSnap called, current value:', this.snapEnabled());
     this.snapEnabled.update(value => !value);
+    console.log('toggleSnap new value:', this.snapEnabled());
   }
 
   toggleGrid(): void {
+    console.log('toggleGrid called, current value:', this.showGrid());
     this.showGrid.update(value => !value);
+    console.log('toggleGrid new value:', this.showGrid());
     this.updateGrid();
   }
 
@@ -269,7 +430,12 @@ export class Editor implements AfterViewInit {
       name: `Floor ${this.floors().length + 1}`,
       index: this.floors().length,
       walls: [],
-      rooms: []
+      rooms: [],
+      doors: [],
+      windows: [],
+      columns: [],
+      staircases: [],
+      components: []
     };
     this.floors.update(floors => [...floors, newFloor]);
     this.switchFloor(this.floors().length - 1);
@@ -310,7 +476,12 @@ export class Editor implements AfterViewInit {
       const updatedFloor: Floor = {
         ...currentFloor,
         walls: [...currentFloor.walls],
-        rooms: [...currentFloor.rooms]
+        rooms: [...currentFloor.rooms],
+        doors: [...currentFloor.doors],
+        windows: [...currentFloor.windows],
+        columns: [...currentFloor.columns],
+        staircases: [...currentFloor.staircases],
+        components: [...currentFloor.components]
       };
       
       // Generate thumbnail before saving
@@ -526,6 +697,41 @@ export class Editor implements AfterViewInit {
     const current = this.selectedItem();
     if (current) {
       this.selectedItem.set({ ...current, [property]: value });
+      
+      // Update the actual component in the floor data
+      if (current.id) {
+        if (current.type === 'door') {
+          this.updateCurrentFloorDoors(doors =>
+            doors.map(door =>
+              door.id === current.id ? { ...door, [property]: value } : door
+            )
+          );
+          this.renderDoors();
+        } else if (current.type === 'window') {
+          this.updateCurrentFloorWindows(windows =>
+            windows.map(window =>
+              window.id === current.id ? { ...window, [property]: value } : window
+            )
+          );
+          this.renderWindows();
+        } else if (current.type === 'column') {
+          this.updateCurrentFloorColumns(columns =>
+            columns.map(column =>
+              column.id === current.id ? { ...column, [property]: value } : column
+            )
+          );
+          this.renderColumns();
+        } else if (current.type === 'staircase') {
+          this.updateCurrentFloorStaircases(staircases =>
+            staircases.map(staircase =>
+              staircase.id === current.id ? { ...staircase, [property]: value } : staircase
+            )
+          );
+          this.renderStaircases();
+        } else if (current.type === 'component') {
+          this.updateComponentProperty(current.id, property as keyof PlacedComponent, value);
+        }
+      }
     }
   }
 
@@ -538,42 +744,150 @@ export class Editor implements AfterViewInit {
     if (event.dataTransfer) {
       event.dataTransfer.setData('application/json', JSON.stringify(item));
       event.dataTransfer.effectAllowed = 'copy';
-      console.log('Dragging item:', item);
+      // Set a visual indicator
+      if (event.dataTransfer.setDragImage && event.target) {
+        const dragImage = document.createElement('div');
+        dragImage.textContent = item.name;
+        dragImage.style.position = 'absolute';
+        dragImage.style.top = '-1000px';
+        document.body.appendChild(dragImage);
+        event.dataTransfer.setDragImage(dragImage, 0, 0);
+        setTimeout(() => document.body.removeChild(dragImage), 0);
+      }
+    }
+  }
+
+  onCanvasDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+    // Add visual feedback
+    if (this.canvasSvg?.nativeElement) {
+      this.canvasSvg.nativeElement.classList.add('drag-over');
+    }
+  }
+
+  onCanvasDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Remove visual feedback
+    if (this.canvasSvg?.nativeElement) {
+      this.canvasSvg.nativeElement.classList.remove('drag-over');
+    }
+    
+    if (!event.dataTransfer) return;
+    
+    try {
+      const data = event.dataTransfer.getData('application/json');
+      if (data) {
+        const catalogItem: CatalogItem = JSON.parse(data);
+        const point = this.screenToCanvas(event.clientX, event.clientY);
+        const snappedPoint = this.snapToGrid(point);
+        this.placeComponent(snappedPoint, catalogItem);
+      }
+    } catch (error) {
+      console.warn('Error handling drop:', error);
+    }
+  }
+
+  onCanvasDragLeave(event: DragEvent): void {
+    // Remove visual feedback when leaving canvas
+    if (this.canvasSvg?.nativeElement) {
+      this.canvasSvg.nativeElement.classList.remove('drag-over');
     }
   }
 
   // Zoom Controls
   zoomIn(): void {
-    this.zoomLevel.update(level => Math.min(level * 1.2, 5));
+    console.log('zoomIn called, current zoom:', this.zoomLevel());
+    const newZoom = Math.min(this.zoomLevel() * 1.2, 5);
+    this.zoomLevel.set(newZoom);
+    console.log('zoomIn new zoom:', this.zoomLevel());
+    this.applyZoom();
   }
 
   zoomOut(): void {
-    this.zoomLevel.update(level => Math.max(level / 1.2, 0.1));
+    console.log('zoomOut called, current zoom:', this.zoomLevel());
+    const newZoom = Math.max(this.zoomLevel() / 1.2, 0.1);
+    this.zoomLevel.set(newZoom);
+    console.log('zoomOut new zoom:', this.zoomLevel());
+    this.applyZoom();
   }
 
   resetZoom(): void {
+    console.log('resetZoom called');
     this.zoomLevel.set(1);
+    this.applyZoom();
+  }
+
+  applyZoom(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement || this.viewMode() !== '2d') return;
+    if (!this.canvasContainer?.nativeElement) return;
+
+    const svg = this.canvasSvg.nativeElement;
+    const container = this.canvasContainer.nativeElement;
+    const rect = container.getBoundingClientRect();
+    
+    if (!rect || rect.width === 0 || rect.height === 0) return;
+
+    const zoom = this.zoomLevel();
+    const baseWidth = rect.width;
+    const baseHeight = rect.height;
+    
+    // Adjust viewBox based on zoom level
+    // When zoom > 1, we show less of the canvas (zoom in)
+    // When zoom < 1, we show more of the canvas (zoom out)
+    const viewBoxWidth = baseWidth / zoom;
+    const viewBoxHeight = baseHeight / zoom;
+    
+    // Center the viewBox
+    const viewBoxX = (baseWidth - viewBoxWidth) / 2;
+    const viewBoxY = (baseHeight - viewBoxHeight) / 2;
+    
+    svg.setAttribute('width', baseWidth.toString());
+    svg.setAttribute('height', baseHeight.toString());
+    svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`);
+    
+    // Re-render everything with new zoom
+    this.updateGrid();
+    this.renderWalls();
+    this.renderRooms();
+    this.renderDoors();
+    this.renderWindows();
+    this.renderColumns();
+    this.renderStaircases();
+    this.renderComponents();
   }
 
   // Undo/Redo
   undo(): void {
+    console.log('undo called, canUndo:', this.canUndo(), 'undoStack length:', this.undoStack().length);
     if (this.canUndo()) {
-      const state = this.undoStack().pop();
+      const stack = [...this.undoStack()];
+      const state = stack.pop();
       if (state) {
-        this.redoStack.update(stack => [...stack, this.getCurrentState()]);
+        this.redoStack.update(redoStack => [...redoStack, this.getCurrentState()]);
         this.applyState(state);
-        this.undoStack.update(stack => stack);
+        this.undoStack.set(stack);
+        console.log('undo applied, new undoStack length:', this.undoStack().length);
       }
     }
   }
 
   redo(): void {
+    console.log('redo called, canRedo:', this.canRedo(), 'redoStack length:', this.redoStack().length);
     if (this.canRedo()) {
-      const state = this.redoStack().pop();
+      const stack = [...this.redoStack()];
+      const state = stack.pop();
       if (state) {
-        this.undoStack.update(stack => [...stack, this.getCurrentState()]);
+        this.undoStack.update(undoStack => [...undoStack, this.getCurrentState()]);
         this.applyState(state);
-        this.redoStack.update(stack => stack);
+        this.redoStack.set(stack);
+        console.log('redo applied, new redoStack length:', this.redoStack().length);
       }
     }
   }
@@ -588,8 +902,27 @@ export class Editor implements AfterViewInit {
   }
 
   private applyState(state: any): void {
-    // Apply state (simplified for now)
     console.log('Applying state:', state);
+    if (state) {
+      if (state.floors) {
+        this.floors.set(state.floors);
+      }
+      if (state.currentFloorIndex !== undefined) {
+        this.currentFloorIndex.set(state.currentFloorIndex);
+      }
+      if (state.selectedItem !== undefined) {
+        this.selectedItem.set(state.selectedItem);
+      }
+      if (state.zoomLevel !== undefined) {
+        this.zoomLevel.set(state.zoomLevel);
+      }
+      // Re-render canvas after applying state
+      if (this.viewMode() === '2d') {
+        setTimeout(() => {
+          this.initializeCanvas();
+        }, 0);
+      }
+    }
   }
 
   private addToUndoStack(): void {
@@ -641,13 +974,27 @@ export class Editor implements AfterViewInit {
         return;
       }
 
-      svg.setAttribute('width', rect.width.toString());
-      svg.setAttribute('height', rect.height.toString());
-      svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+      // Apply zoom when initializing
+      const zoom = this.zoomLevel();
+      const baseWidth = rect.width;
+      const baseHeight = rect.height;
+      const viewBoxWidth = baseWidth / zoom;
+      const viewBoxHeight = baseHeight / zoom;
+      const viewBoxX = (baseWidth - viewBoxWidth) / 2;
+      const viewBoxY = (baseHeight - viewBoxHeight) / 2;
+      
+      svg.setAttribute('width', baseWidth.toString());
+      svg.setAttribute('height', baseHeight.toString());
+      svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`);
 
       this.updateGrid();
       this.renderWalls();
       this.renderRooms();
+      this.renderDoors();
+      this.renderWindows();
+      this.renderColumns();
+      this.renderStaircases();
+      this.renderComponents();
     } catch (error) {
       console.warn('Error initializing canvas:', error);
       // Retry after a delay
@@ -661,10 +1008,9 @@ export class Editor implements AfterViewInit {
     // Only run in browser environment
     if (!isPlatformBrowser(this.platformId)) return;
     
-    if (!this.canvasSvg?.nativeElement || !this.showGrid() || this.viewMode() !== '2d') return;
+    if (!this.canvasSvg?.nativeElement || this.viewMode() !== '2d') return;
     
     const svg = this.canvasSvg.nativeElement;
-    const gridSizePx = this.gridSize(); // Grid size in pixels (1cm = 1px for now)
     
     // Remove existing grid
     const existingGrid = svg.querySelector('#grid-pattern');
@@ -675,6 +1021,13 @@ export class Editor implements AfterViewInit {
     if (existingBg) {
       existingBg.remove();
     }
+    
+    // If grid is hidden, just remove it and return
+    if (!this.showGrid()) {
+      return;
+    }
+    
+    const gridSizePx = this.gridSize(); // Grid size in pixels (1cm = 1px for now)
 
     // Create grid pattern
     let defs = svg.querySelector('defs');
@@ -735,10 +1088,15 @@ export class Editor implements AfterViewInit {
 
     try {
       const rect = container.getBoundingClientRect();
-      const viewBox = svg.viewBox?.baseVal || { width: rect.width, height: rect.height };
+      const viewBox = svg.viewBox?.baseVal;
       
-      const x = ((screenX - rect.left) / rect.width) * viewBox.width;
-      const y = ((screenY - rect.top) / rect.height) * viewBox.height;
+      if (!viewBox) {
+        return { x: screenX - rect.left, y: screenY - rect.top };
+      }
+      
+      // Account for viewBox offset and scale
+      const x = viewBox.x + ((screenX - rect.left) / rect.width) * viewBox.width;
+      const y = viewBox.y + ((screenY - rect.top) / rect.height) * viewBox.height;
       
       return { x, y };
     } catch (error) {
@@ -822,6 +1180,14 @@ export class Editor implements AfterViewInit {
       this.isDrawing.set(true);
       this.currentWallStart.set(snappedPoint);
       this.currentWallEnd.set(snappedPoint);
+    } else if (this.activeTool() === 'door') {
+      this.placeDoor(snappedPoint);
+    } else if (this.activeTool() === 'window') {
+      this.placeWindow(snappedPoint);
+    } else if (this.activeTool() === 'column') {
+      this.placeColumn(snappedPoint);
+    } else if (this.activeTool() === 'staircase') {
+      this.placeStaircase(snappedPoint);
     } else if (this.activeTool() === 'select') {
       // Handle selection logic
       this.handleSelection(snappedPoint);
@@ -837,6 +1203,14 @@ export class Editor implements AfterViewInit {
     if (this.activeTool() === 'wall' && this.isDrawing()) {
       this.currentWallEnd.set(snappedPoint);
       this.renderWalls();
+    } else if (this.isPlacingComponent() && this.componentToPlace()) {
+      // Update preview position for drag and drop
+      const component = this.componentToPlace()!;
+      this.componentToPlace.set({
+        ...component,
+        position: snappedPoint
+      });
+      this.renderComponents();
     }
   }
 
@@ -986,34 +1360,6 @@ export class Editor implements AfterViewInit {
     }
   }
 
-  // Handle selection at a point
-  handleSelection(point: Point): void {
-    // Check if clicking on a wall
-    const clickedWall = this.walls().find(wall => {
-      const dist = this.distanceToLineSegment(point, wall.start, wall.end);
-      return dist < 20; // 20px threshold
-    });
-
-    if (clickedWall) {
-      this.selectWall(clickedWall.id);
-    } else {
-      // Check if clicking on a room
-      const clickedRoom = this.rooms().find(room => {
-        return this.isPointInPolygon(point, room.points);
-      });
-
-      if (clickedRoom) {
-        this.selectedItem.set({
-          type: 'room',
-          id: clickedRoom.id,
-          roomType: clickedRoom.roomType,
-          layer: 'rooms'
-        });
-      } else {
-        this.selectedItem.set(null);
-      }
-    }
-  }
 
   // Calculate distance from point to line segment
   distanceToLineSegment(point: Point, lineStart: Point, lineEnd: Point): number {
@@ -1391,6 +1737,23 @@ export class Editor implements AfterViewInit {
     }
   }
 
+  // Update component properties
+  updateComponentProperty(componentId: string, property: keyof PlacedComponent, value: any): void {
+    this.addToUndoStack();
+    this.updateCurrentFloorComponents(components =>
+      components.map(component =>
+        component.id === componentId ? { ...component, [property]: value } : component
+      )
+    );
+    this.renderComponents();
+    
+    // Update selected item if it's the same component
+    const selected = this.selectedItem();
+    if (selected && selected.id === componentId) {
+      this.selectedItem.set({ ...selected, [property]: value });
+    }
+  }
+
   // Delete selected item
   deleteSelectedItem(): void {
     const selected = this.selectedItem();
@@ -1403,10 +1766,595 @@ export class Editor implements AfterViewInit {
       this.detectRooms(); // Re-detect rooms after wall deletion
     } else if (selected.type === 'room' && selected.id) {
       this.updateCurrentFloorRooms(rooms => rooms.filter(r => r.id !== selected.id));
+    } else if (selected.type === 'door' && selected.id) {
+      this.updateCurrentFloorDoors(doors => doors.filter(d => d.id !== selected.id));
+    } else if (selected.type === 'window' && selected.id) {
+      this.updateCurrentFloorWindows(windows => windows.filter(w => w.id !== selected.id));
+    } else if (selected.type === 'column' && selected.id) {
+      this.updateCurrentFloorColumns(columns => columns.filter(c => c.id !== selected.id));
+    } else if (selected.type === 'staircase' && selected.id) {
+      this.updateCurrentFloorStaircases(staircases => staircases.filter(s => s.id !== selected.id));
+    } else if (selected.type === 'component' && selected.id) {
+      this.updateCurrentFloorComponents(components => components.filter(c => c.id !== selected.id));
     }
 
     this.selectedItem.set(null);
     this.renderWalls();
     this.renderRooms();
+    this.renderDoors();
+    this.renderWindows();
+    this.renderColumns();
+    this.renderStaircases();
+    this.renderComponents();
+  }
+
+  // ============================================
+  // COMPONENT PLACEMENT METHODS
+  // ============================================
+
+  placeDoor(position: Point): void {
+    const door: Door = {
+      id: `door-${Date.now()}`,
+      position,
+      rotation: 0,
+      width: 90, // 90cm standard door width
+      height: 210 // 210cm standard door height
+    };
+
+    this.addToUndoStack();
+    this.updateCurrentFloorDoors(doors => [...doors, door]);
+    this.renderDoors();
+  }
+
+  placeWindow(position: Point): void {
+    const window: Window = {
+      id: `window-${Date.now()}`,
+      position,
+      rotation: 0,
+      width: 120, // 120cm standard window width
+      height: 120 // 120cm standard window height
+    };
+
+    this.addToUndoStack();
+    this.updateCurrentFloorWindows(windows => [...windows, window]);
+    this.renderWindows();
+  }
+
+  placeColumn(position: Point): void {
+    const column: Column = {
+      id: `column-${Date.now()}`,
+      position,
+      diameter: 30, // 30cm column diameter
+      height: 300 // 300cm column height
+    };
+
+    this.addToUndoStack();
+    this.updateCurrentFloorColumns(columns => [...columns, column]);
+    this.renderColumns();
+  }
+
+  placeStaircase(position: Point): void {
+    const staircase: Staircase = {
+      id: `staircase-${Date.now()}`,
+      position,
+      rotation: 0,
+      width: 100, // 100cm staircase width
+      length: 300, // 300cm staircase length
+      direction: 'up'
+    };
+
+    this.addToUndoStack();
+    this.updateCurrentFloorStaircases(staircases => [...staircases, staircase]);
+    this.renderStaircases();
+  }
+
+  placeComponent(position: Point, catalogItem?: CatalogItem): void {
+    const component: PlacedComponent = {
+      id: `component-${Date.now()}`,
+      type: catalogItem?.category || 'furniture',
+      position,
+      rotation: 0,
+      width: 60, // Default 60cm
+      height: 60, // Default 60cm
+      depth: 60, // Default 60cm
+      catalogItemId: catalogItem?.id
+    };
+
+    this.addToUndoStack();
+    this.updateCurrentFloorComponents(components => [...components, component]);
+    this.renderComponents();
+    this.isPlacingComponent.set(false);
+    this.componentToPlace.set(null);
+  }
+
+  // ============================================
+  // UPDATE FLOOR DATA METHODS
+  // ============================================
+
+  private updateCurrentFloorDoors(updateFn: (doors: Door[]) => Door[]): void {
+    const currentIndex = this.currentFloorIndex();
+    const floors = this.floors();
+    
+    if (currentIndex >= 0 && currentIndex < floors.length) {
+      const currentFloor = floors[currentIndex];
+      const updatedFloor: Floor = {
+        ...currentFloor,
+        doors: updateFn([...currentFloor.doors])
+      };
+      this.updateFloorData(currentIndex, updatedFloor);
+    }
+  }
+
+  private updateCurrentFloorWindows(updateFn: (windows: Window[]) => Window[]): void {
+    const currentIndex = this.currentFloorIndex();
+    const floors = this.floors();
+    
+    if (currentIndex >= 0 && currentIndex < floors.length) {
+      const currentFloor = floors[currentIndex];
+      const updatedFloor: Floor = {
+        ...currentFloor,
+        windows: updateFn([...currentFloor.windows])
+      };
+      this.updateFloorData(currentIndex, updatedFloor);
+    }
+  }
+
+  private updateCurrentFloorColumns(updateFn: (columns: Column[]) => Column[]): void {
+    const currentIndex = this.currentFloorIndex();
+    const floors = this.floors();
+    
+    if (currentIndex >= 0 && currentIndex < floors.length) {
+      const currentFloor = floors[currentIndex];
+      const updatedFloor: Floor = {
+        ...currentFloor,
+        columns: updateFn([...currentFloor.columns])
+      };
+      this.updateFloorData(currentIndex, updatedFloor);
+    }
+  }
+
+  private updateCurrentFloorStaircases(updateFn: (staircases: Staircase[]) => Staircase[]): void {
+    const currentIndex = this.currentFloorIndex();
+    const floors = this.floors();
+    
+    if (currentIndex >= 0 && currentIndex < floors.length) {
+      const currentFloor = floors[currentIndex];
+      const updatedFloor: Floor = {
+        ...currentFloor,
+        staircases: updateFn([...currentFloor.staircases])
+      };
+      this.updateFloorData(currentIndex, updatedFloor);
+    }
+  }
+
+  private updateCurrentFloorComponents(updateFn: (components: PlacedComponent[]) => PlacedComponent[]): void {
+    const currentIndex = this.currentFloorIndex();
+    const floors = this.floors();
+    
+    if (currentIndex >= 0 && currentIndex < floors.length) {
+      const currentFloor = floors[currentIndex];
+      const updatedFloor: Floor = {
+        ...currentFloor,
+        components: updateFn([...currentFloor.components])
+      };
+      this.updateFloorData(currentIndex, updatedFloor);
+    }
+  }
+
+  // ============================================
+  // RENDERING METHODS
+  // ============================================
+
+  renderDoors(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement) return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const existingDoors = svg.querySelectorAll('.door-element');
+    existingDoors.forEach(el => el.remove());
+
+    this.doors().forEach(door => {
+      this.renderDoor(door);
+    });
+  }
+
+  renderDoor(door: Door): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement || typeof document === 'undefined') return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('class', 'door-element');
+    group.setAttribute('data-door-id', door.id);
+    
+    // Draw door rectangle
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', (door.position.x - door.width / 2).toString());
+    rect.setAttribute('y', (door.position.y - door.width / 2).toString());
+    rect.setAttribute('width', door.width.toString());
+    rect.setAttribute('height', door.width.toString());
+    rect.setAttribute('fill', '#8B4513');
+    rect.setAttribute('stroke', '#654321');
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('rx', '2');
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('click', () => this.selectDoor(door.id));
+    
+    // Draw door arc (opening)
+    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const radius = door.width;
+    const startAngle = 0;
+    const endAngle = Math.PI / 2;
+    const startX = door.position.x;
+    const startY = door.position.y - door.width / 2;
+    const endX = door.position.x + door.width / 2;
+    const endY = door.position.y;
+    
+    arc.setAttribute('d', `M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`);
+    arc.setAttribute('fill', 'none');
+    arc.setAttribute('stroke', '#654321');
+    arc.setAttribute('stroke-width', '2');
+    arc.setAttribute('stroke-dasharray', '3,3');
+    
+    group.appendChild(rect);
+    group.appendChild(arc);
+    svg.appendChild(group);
+  }
+
+  renderWindows(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement) return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const existingWindows = svg.querySelectorAll('.window-element');
+    existingWindows.forEach(el => el.remove());
+
+    this.windows().forEach(window => {
+      this.renderWindow(window);
+    });
+  }
+
+  renderWindow(window: Window): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement || typeof document === 'undefined') return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('class', 'window-element');
+    group.setAttribute('data-window-id', window.id);
+    
+    // Draw window rectangle
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', (window.position.x - window.width / 2).toString());
+    rect.setAttribute('y', (window.position.y - window.height / 2).toString());
+    rect.setAttribute('width', window.width.toString());
+    rect.setAttribute('height', window.height.toString());
+    rect.setAttribute('fill', '#87CEEB');
+    rect.setAttribute('stroke', '#4682B4');
+    rect.setAttribute('stroke-width', '2');
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('click', () => this.selectWindow(window.id));
+    
+    // Draw window cross (mullions)
+    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line1.setAttribute('x1', window.position.x.toString());
+    line1.setAttribute('y1', (window.position.y - window.height / 2).toString());
+    line1.setAttribute('x2', window.position.x.toString());
+    line1.setAttribute('y2', (window.position.y + window.height / 2).toString());
+    line1.setAttribute('stroke', '#4682B4');
+    line1.setAttribute('stroke-width', '1');
+    
+    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line2.setAttribute('x1', (window.position.x - window.width / 2).toString());
+    line2.setAttribute('y1', window.position.y.toString());
+    line2.setAttribute('x2', (window.position.x + window.width / 2).toString());
+    line2.setAttribute('y2', window.position.y.toString());
+    line2.setAttribute('stroke', '#4682B4');
+    line2.setAttribute('stroke-width', '1');
+    
+    group.appendChild(rect);
+    group.appendChild(line1);
+    group.appendChild(line2);
+    svg.appendChild(group);
+  }
+
+  renderColumns(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement) return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const existingColumns = svg.querySelectorAll('.column-element');
+    existingColumns.forEach(el => el.remove());
+
+    this.columns().forEach(column => {
+      this.renderColumn(column);
+    });
+  }
+
+  renderColumn(column: Column): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement || typeof document === 'undefined') return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('class', 'column-element');
+    circle.setAttribute('data-column-id', column.id);
+    circle.setAttribute('cx', column.position.x.toString());
+    circle.setAttribute('cy', column.position.y.toString());
+    circle.setAttribute('r', (column.diameter / 2).toString());
+    circle.setAttribute('fill', '#808080');
+    circle.setAttribute('stroke', '#606060');
+    circle.setAttribute('stroke-width', '2');
+    circle.style.cursor = 'pointer';
+    circle.addEventListener('click', () => this.selectColumn(column.id));
+    
+    svg.appendChild(circle);
+  }
+
+  renderStaircases(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement) return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const existingStaircases = svg.querySelectorAll('.staircase-element');
+    existingStaircases.forEach(el => el.remove());
+
+    this.staircases().forEach(staircase => {
+      this.renderStaircase(staircase);
+    });
+  }
+
+  renderStaircase(staircase: Staircase): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement || typeof document === 'undefined') return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('class', 'staircase-element');
+    group.setAttribute('data-staircase-id', staircase.id);
+    
+    // Draw staircase rectangle
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', (staircase.position.x - staircase.width / 2).toString());
+    rect.setAttribute('y', (staircase.position.y - staircase.length / 2).toString());
+    rect.setAttribute('width', staircase.width.toString());
+    rect.setAttribute('height', staircase.length.toString());
+    rect.setAttribute('fill', '#D3D3D3');
+    rect.setAttribute('stroke', '#A9A9A9');
+    rect.setAttribute('stroke-width', '2');
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('click', () => this.selectStaircase(staircase.id));
+    
+    // Draw step lines
+    const stepCount = 10;
+    const stepHeight = staircase.length / stepCount;
+    for (let i = 1; i < stepCount; i++) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      const y = staircase.position.y - staircase.length / 2 + i * stepHeight;
+      line.setAttribute('x1', (staircase.position.x - staircase.width / 2).toString());
+      line.setAttribute('y1', y.toString());
+      line.setAttribute('x2', (staircase.position.x + staircase.width / 2).toString());
+      line.setAttribute('y2', y.toString());
+      line.setAttribute('stroke', '#A9A9A9');
+      line.setAttribute('stroke-width', '1');
+      group.appendChild(line);
+    }
+    
+    // Draw direction arrow
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const arrowY = staircase.position.y;
+    const arrowX = staircase.position.x;
+    const arrowSize = 20;
+    if (staircase.direction === 'up') {
+      arrow.setAttribute('d', `M ${arrowX} ${arrowY - arrowSize} L ${arrowX - 10} ${arrowY} L ${arrowX + 10} ${arrowY} Z`);
+    } else {
+      arrow.setAttribute('d', `M ${arrowX} ${arrowY + arrowSize} L ${arrowX - 10} ${arrowY} L ${arrowX + 10} ${arrowY} Z`);
+    }
+    arrow.setAttribute('fill', '#000000');
+    
+    group.appendChild(rect);
+    group.appendChild(arrow);
+    svg.appendChild(group);
+  }
+
+  renderComponents(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement) return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const existingComponents = svg.querySelectorAll('.component-element');
+    existingComponents.forEach(el => el.remove());
+
+    this.components().forEach(component => {
+      this.renderComponent(component);
+    });
+
+    // Render preview component if placing
+    if (this.isPlacingComponent() && this.componentToPlace()) {
+      const preview = this.componentToPlace()!;
+      this.renderComponent(preview, true);
+    }
+  }
+
+  renderComponent(component: PlacedComponent, isPreview: boolean = false): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (!this.canvasSvg?.nativeElement || typeof document === 'undefined') return;
+    
+    const svg = this.canvasSvg.nativeElement;
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('class', isPreview ? 'component-preview' : 'component-element');
+    if (!isPreview) {
+      group.setAttribute('data-component-id', component.id);
+    }
+    
+    // Draw component rectangle
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', (component.position.x - component.width / 2).toString());
+    rect.setAttribute('y', (component.position.y - component.height / 2).toString());
+    rect.setAttribute('width', component.width.toString());
+    rect.setAttribute('height', component.height.toString());
+    rect.setAttribute('fill', isPreview ? '#4CAF50' : '#9E9E9E');
+    rect.setAttribute('fill-opacity', isPreview ? '0.5' : '0.8');
+    rect.setAttribute('stroke', isPreview ? '#2E7D32' : '#616161');
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('rx', '4');
+    if (!isPreview) {
+      rect.style.cursor = 'pointer';
+      rect.addEventListener('click', () => this.selectComponent(component.id));
+    }
+    
+    group.appendChild(rect);
+    svg.appendChild(group);
+  }
+
+  // Selection methods
+  selectDoor(doorId: string): void {
+    const door = this.doors().find(d => d.id === doorId);
+    if (door) {
+      this.selectedItem.set({
+        type: 'door',
+        id: door.id,
+        length: door.width,
+        width: door.width,
+        height: door.height,
+        rotation: door.rotation
+      });
+    }
+  }
+
+  selectWindow(windowId: string): void {
+    const window = this.windows().find(w => w.id === windowId);
+    if (window) {
+      this.selectedItem.set({
+        type: 'window',
+        id: window.id,
+        length: window.width,
+        width: window.width,
+        height: window.height,
+        rotation: window.rotation
+      });
+    }
+  }
+
+  selectColumn(columnId: string): void {
+    const column = this.columns().find(c => c.id === columnId);
+    if (column) {
+      this.selectedItem.set({
+        type: 'column',
+        id: column.id,
+        length: column.diameter,
+        width: column.diameter,
+        height: column.height
+      });
+    }
+  }
+
+  selectStaircase(staircaseId: string): void {
+    const staircase = this.staircases().find(s => s.id === staircaseId);
+    if (staircase) {
+      this.selectedItem.set({
+        type: 'staircase',
+        id: staircase.id,
+        length: staircase.length,
+        width: staircase.width,
+        rotation: staircase.rotation
+      });
+    }
+  }
+
+  selectComponent(componentId: string): void {
+    const component = this.components().find(c => c.id === componentId);
+    if (component) {
+      this.selectedItem.set({
+        type: 'component',
+        id: component.id,
+        length: component.width,
+        width: component.width,
+        height: component.height,
+        rotation: component.rotation
+      });
+    }
+  }
+
+  // Update handleSelection to include new component types
+  handleSelection(point: Point): void {
+    // Check doors
+    const clickedDoor = this.doors().find(door => {
+      const dist = this.calculateDistance(point, door.position);
+      return dist < door.width / 2;
+    });
+    if (clickedDoor) {
+      this.selectDoor(clickedDoor.id);
+      return;
+    }
+
+    // Check windows
+    const clickedWindow = this.windows().find(window => {
+      const distX = Math.abs(point.x - window.position.x);
+      const distY = Math.abs(point.y - window.position.y);
+      return distX < window.width / 2 && distY < window.height / 2;
+    });
+    if (clickedWindow) {
+      this.selectWindow(clickedWindow.id);
+      return;
+    }
+
+    // Check columns
+    const clickedColumn = this.columns().find(column => {
+      const dist = this.calculateDistance(point, column.position);
+      return dist < column.diameter / 2;
+    });
+    if (clickedColumn) {
+      this.selectColumn(clickedColumn.id);
+      return;
+    }
+
+    // Check staircases
+    const clickedStaircase = this.staircases().find(staircase => {
+      const distX = Math.abs(point.x - staircase.position.x);
+      const distY = Math.abs(point.y - staircase.position.y);
+      return distX < staircase.width / 2 && distY < staircase.length / 2;
+    });
+    if (clickedStaircase) {
+      this.selectStaircase(clickedStaircase.id);
+      return;
+    }
+
+    // Check components
+    const clickedComponent = this.components().find(component => {
+      const distX = Math.abs(point.x - component.position.x);
+      const distY = Math.abs(point.y - component.position.y);
+      return distX < component.width / 2 && distY < component.height / 2;
+    });
+    if (clickedComponent) {
+      this.selectComponent(clickedComponent.id);
+      return;
+    }
+
+    // Check walls
+    const clickedWall = this.walls().find(wall => {
+      const dist = this.distanceToLineSegment(point, wall.start, wall.end);
+      return dist < 20;
+    });
+    if (clickedWall) {
+      this.selectWall(clickedWall.id);
+      return;
+    }
+
+    // Check rooms
+    const clickedRoom = this.rooms().find(room => {
+      return this.isPointInPolygon(point, room.points);
+    });
+    if (clickedRoom) {
+      this.selectedItem.set({
+        type: 'room',
+        id: clickedRoom.id,
+        roomType: clickedRoom.roomType,
+        layer: 'rooms'
+      });
+      return;
+    }
+
+    this.selectedItem.set(null);
   }
 }

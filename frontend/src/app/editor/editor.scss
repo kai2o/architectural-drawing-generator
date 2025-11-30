@@ -26,15 +26,21 @@
   border-bottom: 1px solid var(--archaid-border);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   z-index: 100;
+  position: relative;
   flex-shrink: 0; // Prevents action bar from shrinking
-  overflow: hidden; // Prevents content overflow
+  overflow: visible; // Changed from hidden to visible to allow button clicks
 
-  // Ensure all buttons have centered content
+  // Ensure all buttons have centered content and are clickable
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-align: center;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 101;
+    cursor: pointer;
+    user-select: none;
   }
 
   .top-bar-left {
@@ -42,6 +48,8 @@
     align-items: center;
     gap: 1rem;
     flex: 0 0 auto;
+    position: relative;
+    z-index: 101;
 
     .project-info {
       display: flex;
@@ -68,6 +76,8 @@
     gap: 1rem;
     flex: 1;
     justify-content: center;
+    position: relative;
+    z-index: 101;
 
     .view-controls,
     .grid-controls,
@@ -141,6 +151,8 @@
 
   .top-bar-right {
     display: flex;
+    position: relative;
+    z-index: 101;
     align-items: center;
     gap: 0.5rem;
     flex: 0 0 auto;
@@ -371,6 +383,24 @@
   left: 0;
   cursor: crosshair;
   background: white;
+  transition: background-color 0.2s ease;
+
+  &.drag-over {
+    background-color: rgba(46, 134, 255, 0.05);
+    border: 2px dashed var(--archaid-primary);
+  }
+
+  &.cursor-crosshair {
+    cursor: crosshair;
+  }
+
+  &.cursor-pointer {
+    cursor: pointer;
+  }
+
+  &.cursor-move {
+    cursor: move;
+  }
   
   .wall-line {
     cursor: pointer;
@@ -399,6 +429,24 @@
   .room-label,
   .room-area {
     user-select: none;
+    pointer-events: none;
+  }
+
+  .door-element,
+  .window-element,
+  .column-element,
+  .staircase-element,
+  .component-element {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    
+    &:hover {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+  }
+
+  .component-preview {
+    opacity: 0.6;
     pointer-events: none;
   }
 }
@@ -436,6 +484,8 @@
   bottom: 0;
   pointer-events: none;
   z-index: 10;
+  // Ensure it doesn't cover the action bar
+  margin-top: 0;
 
   > * {
     pointer-events: auto;
@@ -807,6 +857,16 @@
   }
 
   .catalog-item {
+    cursor: grab;
+    
+    &:active {
+      cursor: grabbing;
+    }
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
     display: flex;
     flex-direction: column;
     align-items: center;
