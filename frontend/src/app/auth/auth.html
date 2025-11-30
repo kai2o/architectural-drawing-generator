@@ -1,0 +1,92 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <h2>Authentication</h2>
+      <p class="text-muted">{{ isLoginMode ? 'Sign in to your ArchAID account' : 'Create your ArchAID account' }}</p>
+    </div>
+    
+    <div class="auth-content">
+      <div *ngIf="errorMessage" class="alert alert-danger" role="alert">
+        {{ errorMessage }}
+      </div>
+
+      <form (ngSubmit)="onSubmit()" #authForm="ngForm">
+        <div class="form-group" *ngIf="!isLoginMode">
+          <label>First Name</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            placeholder="Enter your first name"
+            [(ngModel)]="firstName"
+            name="firstName"
+            required>
+        </div>
+
+        <div class="form-group" *ngIf="!isLoginMode">
+          <label>Last Name</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            placeholder="Enter your last name"
+            [(ngModel)]="lastName"
+            name="lastName"
+            required>
+        </div>
+
+        <div class="form-group" *ngIf="!isLoginMode">
+          <label>Role</label>
+          <select 
+            class="form-control" 
+            [(ngModel)]="role"
+            name="role">
+            <option value="HouseOwner">House Owner</option>
+            <option value="Architect">Architect</option>
+            <option value="Vendor">Vendor</option>
+            <option value="Student">Student</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Email</label>
+          <input 
+            type="email" 
+            class="form-control" 
+            placeholder="Enter your email"
+            [(ngModel)]="email"
+            name="email"
+            required>
+        </div>
+        
+        <div class="form-group">
+          <label>Password</label>
+          <input 
+            type="password" 
+            class="form-control" 
+            placeholder="Enter your password"
+            [(ngModel)]="password"
+            name="password"
+            required>
+        </div>
+        
+        <button 
+          type="submit" 
+          class="btn btn-primary w-100"
+          [disabled]="isLoading">
+          <span *ngIf="isLoading" class="spinner-border spinner-border-sm me-2" role="status"></span>
+          {{ isLoginMode ? 'Sign In' : 'Create Account' }}
+        </button>
+      </form>
+      
+      <div class="auth-footer">
+        <a href="#" class="text-primary" *ngIf="isLoginMode">Forgot password?</a>
+        <a 
+          href="#" 
+          class="text-primary" 
+          (click)="toggleMode(); $event.preventDefault()">
+          {{ isLoginMode ? 'Create account' : 'Already have an account? Sign in' }}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

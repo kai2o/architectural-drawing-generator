@@ -1,0 +1,106 @@
+<div class="app-container">
+  <!-- Sidebar Navigation - Only show if not on auth page and authenticated -->
+  @if (!isAuthPage() && isAuthenticated()) {
+  <aside class="sidebar" [class.collapsed]="sidebarCollapsed()">
+    <div class="sidebar-header">
+      @if (!sidebarCollapsed()) {
+        <div class="logo">
+          <h4 class="logo-text">Arch<span class="logo-accent">AID</span></h4>
+          <small class="logo-subtitle">AI-Powered Design Platform</small>
+        </div>
+      }
+      <button 
+        class="sidebar-toggle" 
+        type="button"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
+        @if (sidebarCollapsed()) {
+          <!-- Burger menu icon (three horizontal lines) -->
+          <svg class="burger-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        } @else {
+          <!-- Close icon (X) when expanded -->
+          <svg class="close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        }
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a 
+        routerLink="/editor" 
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{exact: false}"
+        class="nav-item"
+        [title]="sidebarCollapsed() ? 'Editor' : ''">
+        <i class="bi bi-pencil-square"></i>
+        @if (!sidebarCollapsed()) {
+          <span>Editor</span>
+        }
+      </a>
+      
+      <a 
+        routerLink="/dashboard" 
+        routerLinkActive="active"
+        class="nav-item"
+        [title]="sidebarCollapsed() ? 'Dashboard' : ''">
+        <i class="bi bi-speedometer2"></i>
+        @if (!sidebarCollapsed()) {
+          <span>Dashboard</span>
+        }
+      </a>
+      
+      <a 
+        routerLink="/marketplace" 
+        routerLinkActive="active"
+        class="nav-item"
+        [title]="sidebarCollapsed() ? 'Marketplace' : ''">
+        <i class="bi bi-shop"></i>
+        @if (!sidebarCollapsed()) {
+          <span>Marketplace</span>
+        }
+      </a>
+      
+      @if (currentUser()) {
+        <div class="nav-item user-info" [title]="sidebarCollapsed() ? currentUser()?.email : ''">
+
+          @if (!sidebarCollapsed()) {
+            <div class="user-details">
+              <span class="user-name">{{ currentUser()?.firstName }} {{ currentUser()?.lastName }}</span>
+              <small class="user-email">{{ currentUser()?.email }}</small>
+            </div>
+          }
+        </div>
+        
+        <button 
+          type="button"
+          class="nav-item logout-btn"
+          (click)="logout()"
+          [title]="sidebarCollapsed() ? 'Logout' : ''">
+          @if (!sidebarCollapsed()) {
+            <span>Logout</span>
+          }
+        </button>
+      }
+    </nav>
+
+    @if (!sidebarCollapsed()) {
+      <div class="sidebar-footer">
+        <div class="version-info">
+          <small class="text-muted">Version 1.0.0</small>
+        </div>
+      </div>
+    }
+  </aside>
+  }
+
+  <!-- Main Content Area -->
+  <main class="main-content" [class.sidebar-expanded]="!sidebarCollapsed() && !isAuthPage()">
+    <router-outlet />
+  </main>
+</div>

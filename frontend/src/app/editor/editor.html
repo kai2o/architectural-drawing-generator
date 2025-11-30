@@ -1,0 +1,431 @@
+<!-- Planner5D-Inspired Canvas Workspace Shell -->
+<div class="editor-workspace">
+  <!-- Top Action Bar -->
+  <div class="top-action-bar">
+    <div class="top-bar-left">
+      <div class="project-info">
+        <h5 class="project-name">Untitled Project</h5>
+        <span class="project-meta">{{ floors()[currentFloorIndex()]?.name || 'Ground Floor' }} • {{ formatArea(totalArea()) }}</span>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" type="button">
+        <i class="bi bi-people"></i> Share
+      </button>
+    </div>
+
+    <div class="top-bar-center">
+      <div class="view-controls">
+        <button 
+          class="btn btn-sm"
+          [class.btn-primary]="viewMode() === '2d'"
+          [class.btn-outline-primary]="viewMode() !== '2d'"
+          type="button"
+          (click)="setViewMode('2d')">
+          <i class="bi bi-square"></i> 2D
+        </button>
+        <button 
+          class="btn btn-sm"
+          [class.btn-primary]="viewMode() === '3d'"
+          [class.btn-outline-primary]="viewMode() !== '3d'"
+          type="button"
+          (click)="setViewMode('3d')">
+          <i class="bi bi-box"></i> 3D
+        </button>
+      </div>
+      
+      <div class="grid-controls">
+        <button 
+          class="btn btn-sm grid-toggle-btn"
+          [class.btn-success]="showGrid()"
+          [class.btn-outline-secondary]="!showGrid()"
+          type="button"
+          (click)="toggleGrid()"
+          [title]="showGrid() ? 'Hide Grid' : 'Show Grid'"
+          [attr.aria-label]="showGrid() ? 'Hide Grid' : 'Show Grid'">
+          <i class="bi bi-grid-3x3"></i>
+          <span class="btn-label">{{ showGrid() ? 'Grid On' : 'Grid Off' }}</span>
+        </button>
+        <button 
+          class="btn btn-sm snap-toggle-btn"
+          [class.btn-success]="snapEnabled()"
+          [class.btn-outline-secondary]="!snapEnabled()"
+          type="button"
+          (click)="toggleSnap()"
+          [title]="snapEnabled() ? 'Disable Snap to Grid' : 'Enable Snap to Grid'"
+          [attr.aria-label]="snapEnabled() ? 'Disable Snap to Grid' : 'Enable Snap to Grid'">
+          <i class="bi" [ngClass]="snapEnabled() ? 'bi-grid-3x3-gap-fill' : 'bi-grid-3x3'"></i>
+          <span class="btn-label">{{ snapEnabled() ? 'Snap On' : 'Snap Off' }}</span>
+        </button>
+        <select class="form-select form-select-sm" [ngModel]="gridSize()" (ngModelChange)="gridSize.set($event); updateGrid()" title="Grid Size">
+          <option value="10">100mm</option>
+          <option value="25">250mm</option>
+          <option value="50">500mm</option>
+          <option value="100">1m</option>
+        </select>
+      </div>
+
+      <div class="units-control">
+        <select class="form-select form-select-sm" [ngModel]="measurementUnit()" (ngModelChange)="measurementUnit.set($event)">
+          <option value="metric">m / mm</option>
+          <option value="imperial">ft / in</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="top-bar-right">
+      <button 
+        class="btn btn-sm btn-outline-primary coming-soon-btn" 
+        type="button" 
+        title="Preview (Coming in Task 21)"
+        disabled>
+        <i class="bi bi-eye"></i>
+        <span class="btn-label">Preview</span>
+      </button>
+      <button 
+        class="btn btn-sm btn-outline-primary coming-soon-btn" 
+        type="button" 
+        title="Render 4K View (Coming in Task 21)"
+        disabled>
+        <i class="bi bi-camera"></i>
+        <span class="btn-label">Render</span>
+      </button>
+      <button 
+        class="btn btn-sm btn-outline-primary coming-soon-btn" 
+        type="button" 
+        title="Export CAD Files (Coming in Task 20)"
+        disabled>
+        <i class="bi bi-download"></i>
+        <span class="btn-label">Export</span>
+      </button>
+      <div class="btn-group" role="group" aria-label="Undo and Redo actions">
+        <button 
+          class="btn btn-sm btn-outline-secondary undo-redo-btn"
+          type="button"
+          [disabled]="!canUndo()"
+          (click)="undo()"
+          title="Undo (Ctrl+Z)"
+          [attr.aria-label]="'Undo' + (canUndo() ? '' : ' (no actions to undo)')">
+          <i class="bi bi-arrow-counterclockwise"></i>
+          <span class="btn-text">Undo</span>
+        </button>
+        <button 
+          class="btn btn-sm btn-outline-secondary undo-redo-btn"
+          type="button"
+          [disabled]="!canRedo()"
+          (click)="redo()"
+          title="Redo (Ctrl+Y)"
+          [attr.aria-label]="'Redo' + (canRedo() ? '' : ' (no actions to redo)')">
+          <i class="bi bi-arrow-clockwise"></i>
+          <span class="btn-text">Redo</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Workspace Container -->
+  <div class="workspace-container">
+    <!-- Left Toolbar -->
+    <div class="left-toolbar">
+      <div class="toolbar-section">
+        <h6 class="toolbar-title">Draw Tools</h6>
+        <div class="tool-group">
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'wall'"
+            type="button"
+            (click)="setActiveTool('wall')"
+            title="Wall Tool">
+            <i class="bi bi-pencil"></i>
+            <span>Wall</span>
+          </button>
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'door'"
+            type="button"
+            (click)="setActiveTool('door')"
+            title="Door Tool">
+            <i class="bi bi-door-open"></i>
+            <span>Door</span>
+          </button>
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'window'"
+            type="button"
+            (click)="setActiveTool('window')"
+            title="Window Tool">
+            <i class="bi bi-square"></i>
+            <span>Window</span>
+          </button>
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'column'"
+            type="button"
+            (click)="setActiveTool('column')"
+            title="Column Tool">
+            <i class="bi bi-circle"></i>
+            <span>Column</span>
+          </button>
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'staircase'"
+            type="button"
+            (click)="setActiveTool('staircase')"
+            title="Staircase Tool">
+            <i class="bi bi-diagram-3"></i>
+            <span>Stairs</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-section">
+        <h6 class="toolbar-title">Room & Space</h6>
+        <div class="tool-group">
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'room'"
+            type="button"
+            (click)="setActiveTool('room')"
+            title="Room Tool">
+            <i class="bi bi-pentagon"></i>
+            <span>Room</span>
+          </button>
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'partition'"
+            type="button"
+            (click)="setActiveTool('partition')"
+            title="Partition/Cabin Tool">
+            <i class="bi bi-grid-3x3-gap"></i>
+            <span>Partition</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-section">
+        <h6 class="toolbar-title">Utilities</h6>
+        <div class="tool-group">
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'measure'"
+            type="button"
+            (click)="setActiveTool('measure')"
+            title="Measurement Tool">
+            <i class="bi bi-rulers"></i>
+            <span>Measure</span>
+          </button>
+          <button 
+            class="tool-btn"
+            [class.active]="activeTool() === 'select'"
+            type="button"
+            (click)="setActiveTool('select')"
+            title="Select Tool">
+            <i class="bi bi-cursor"></i>
+            <span>Select</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Central Canvas Container -->
+    <div class="canvas-container">
+      <div class="canvas-wrapper" #canvasContainer>
+        <!-- 2D SVG Canvas -->
+        <svg 
+          *ngIf="viewMode() === '2d'"
+          #canvasSvg
+          class="canvas-svg"
+          (mousedown)="onCanvasMouseDown($event)"
+          (mousemove)="onCanvasMouseMove($event)"
+          (mouseup)="onCanvasMouseUp($event)"
+          (mouseleave)="onCanvasMouseLeave()">
+          <!-- Grid, walls, and rooms will be rendered here -->
+        </svg>
+        
+        <!-- 3D Canvas Placeholder -->
+        <div *ngIf="viewMode() === '3d'" class="canvas-placeholder" id="editor-canvas">
+          <div class="canvas-message">
+            <i class="bi bi-box-arrow-up-right" style="font-size: 3rem; color: var(--archaid-text-secondary);"></i>
+            <p>3D View</p>
+            <small>3D rendering will be implemented in Task 7</small>
+          </div>
+        </div>
+        
+        <!-- Canvas Overlay Controls -->
+        <div class="canvas-overlay">
+          <div class="zoom-controls">
+            <button class="btn btn-sm btn-light zoom-btn" type="button" (click)="zoomIn()" title="Zoom In">
+              <i class="bi bi-zoom-in"></i>
+              <span class="zoom-label">+</span>
+            </button>
+            <button class="btn btn-sm btn-light zoom-btn" type="button" (click)="zoomOut()" title="Zoom Out">
+              <i class="bi bi-zoom-out"></i>
+              <span class="zoom-label">−</span>
+            </button>
+            <button class="btn btn-sm btn-light zoom-btn" type="button" (click)="resetZoom()" title="Reset Zoom (100%)">
+              <i class="bi bi-arrows-angle-contract"></i>
+              <span class="zoom-label">100%</span>
+            </button>
+          </div>
+          
+          <div class="floor-manager">
+            <button class="btn btn-sm btn-primary" type="button" (click)="addFloor()" title="Add Floor">
+              <i class="bi bi-plus-circle"></i> Add Floor
+            </button>
+            <div class="floor-thumbnails" *ngIf="floors().length > 0">
+              <div 
+                class="floor-thumb"
+                *ngFor="let floor of floors(); let i = index"
+                [class.active]="currentFloorIndex() === i"
+                [title]="floor.name">
+                <button 
+                  class="floor-delete-btn"
+                  type="button"
+                  (click)="deleteFloor(i, $event)"
+                  [disabled]="floors().length === 1"
+                  [title]="floors().length === 1 ? 'Cannot delete the last floor' : 'Delete floor'"
+                  [attr.aria-label]="'Delete ' + floor.name">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+                <div class="floor-thumb-content" (click)="switchFloor(i)">
+                  <div class="floor-thumb-preview" *ngIf="floor.thumbnail; else noThumbnail">
+                    <img [src]="floor.thumbnail" [alt]="floor.name + ' preview'" />
+                  </div>
+                  <ng-template #noThumbnail>
+                    <div class="floor-thumb-placeholder">
+                      <i class="bi bi-layers"></i>
+                    </div>
+                  </ng-template>
+                  <span class="floor-number">{{ i + 1 }}</span>
+                  <small>{{ floor.name }}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Inspector Panel -->
+    <div class="right-inspector">
+      <div class="inspector-header">
+        <h6>Properties</h6>
+        <button class="btn btn-sm btn-link p-0" type="button" (click)="toggleInspector()">
+          <i class="bi" [class.bi-chevron-right]="inspectorCollapsed()" [class.bi-chevron-left]="!inspectorCollapsed()"></i>
+        </button>
+      </div>
+      
+      <div class="inspector-content" *ngIf="!inspectorCollapsed()">
+        <div *ngIf="selectedItem(); else noSelection" class="inspector-form">
+          <div class="form-group">
+            <label>Item Type</label>
+            <input type="text" class="form-control form-control-sm" [value]="selectedItem()!.type" readonly>
+          </div>
+          
+          <div class="form-group">
+            <label>Dimensions</label>
+            <div class="d-flex gap-2">
+              <input type="number" class="form-control form-control-sm" placeholder="Length" [ngModel]="selectedItem()!.length" (ngModelChange)="updateSelectedItem('length', $event)">
+              <input type="number" class="form-control form-control-sm" placeholder="Width" [ngModel]="selectedItem()!.width" (ngModelChange)="updateSelectedItem('width', $event)">
+              <input type="number" class="form-control form-control-sm" placeholder="Height" [ngModel]="selectedItem()!.height" (ngModelChange)="updateSelectedItem('height', $event)">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Rotation</label>
+            <input type="number" class="form-control form-control-sm" placeholder="Degrees" [ngModel]="selectedItem()!.rotation" (ngModelChange)="updateSelectedItem('rotation', $event)">
+          </div>
+
+          <div class="form-group" *ngIf="selectedItem()!.type === 'room'">
+            <label>Room Type</label>
+            <select 
+              class="form-select form-select-sm" 
+              [ngModel]="selectedItem()!.roomType || 'other'" 
+              (ngModelChange)="updateRoomType(selectedItem()!.id!, $event); updateSelectedItem('roomType', $event)">
+              <option *ngFor="let roomType of roomTypes" [value]="roomType.value">
+                {{ roomType.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Layer</label>
+            <select class="form-select form-select-sm" [ngModel]="selectedItem()!.layer" (ngModelChange)="updateSelectedItem('layer', $event)">
+              <option value="walls">Walls</option>
+              <option value="furniture">Furniture</option>
+              <option value="decor">Decor</option>
+              <option value="annotations">Annotations</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Clearance</label>
+            <input type="number" class="form-control form-control-sm" placeholder="mm" [ngModel]="selectedItem()!.clearance" (ngModelChange)="updateSelectedItem('clearance', $event)">
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-sm btn-primary w-100" type="button">Apply Changes</button>
+            <button class="btn btn-sm btn-outline-danger w-100" type="button" (click)="deleteSelectedItem()">Delete</button>
+          </div>
+        </div>
+        
+        <ng-template #noSelection>
+          <div class="no-selection">
+            <i class="bi bi-info-circle"></i>
+            <p>No item selected</p>
+            <small>Click on an object to view properties</small>
+          </div>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Catalog Placeholder -->
+  <div class="bottom-catalog">
+    <div class="catalog-header">
+      <div class="catalog-title">
+        <i class="bi bi-grid"></i>
+        <span>Object Library</span>
+      </div>
+      <div class="catalog-controls">
+        <input 
+          type="text" 
+          class="form-control form-control-sm" 
+          placeholder="Search items..."
+          [ngModel]="catalogSearch()" (ngModelChange)="catalogSearch.set($event)"
+          style="width: 200px;">
+        <select class="form-select form-select-sm" [ngModel]="catalogCategory()" (ngModelChange)="catalogCategory.set($event)">
+          <option value="">All Categories</option>
+          <option value="furniture">Furniture</option>
+          <option value="decor">Decor</option>
+          <option value="appliances">Appliances</option>
+          <option value="lighting">Lighting</option>
+        </select>
+        <select class="form-select form-select-sm" [ngModel]="catalogVendor()" (ngModelChange)="catalogVendor.set($event)">
+          <option value="">All Vendors</option>
+          <option value="ikea">IKEA</option>
+          <option value="local">Local Vendor</option>
+        </select>
+      </div>
+      <button class="btn btn-sm btn-link" type="button" (click)="toggleCatalog()">
+        <i class="bi" [class.bi-chevron-down]="catalogCollapsed()" [class.bi-chevron-up]="!catalogCollapsed()"></i>
+      </button>
+    </div>
+    
+    <div class="catalog-content" *ngIf="!catalogCollapsed()">
+      <div class="catalog-grid">
+        <div class="catalog-item" *ngFor="let item of catalogItems()" draggable="true" (dragstart)="onDragStart($event, item)">
+          <div class="item-thumbnail">
+            <i class="bi bi-box" style="font-size: 2rem;"></i>
+          </div>
+          <div class="item-info">
+            <strong>{{ item.name }}</strong>
+            <small>{{ item.category }}</small>
+            <small class="text-primary" *ngIf="item.vendor">{{ item.vendor }}</small>
+          </div>
+        </div>
+      </div>
+      <div class="catalog-empty" *ngIf="catalogItems().length === 0">
+        <p>No items found. Catalog will be populated in Task 15.</p>
+      </div>
+    </div>
+  </div>
+</div>
